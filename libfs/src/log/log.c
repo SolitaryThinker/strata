@@ -218,6 +218,7 @@ static loghdr_meta_t *read_log_header_meta(uint16_t from_dev, addr_t hdr_addr)
 	loghdr_meta->hdr_blkno = hdr_addr;
 	loghdr_meta->is_hdr_allocated = 1;
 
+
 	mlfs_debug("%s", "--------------------------------\n");
 	mlfs_debug("%d\n", _loghdr->n);
 	mlfs_debug("next loghdr %lx\n", _loghdr->next_loghdr_blkno);
@@ -1405,7 +1406,7 @@ void print_replay_list(struct replay_list *replay_list)
 	uint64_t tsc_begin;
 
 	list_for_each_safe(l, tmp, &replay_list->head) {
-		node_type = (uint8_t)l + sizeof(struct list_head);
+		node_type = (uint8_t *)l + sizeof(struct list_head);
 		mlfs_assert(*node_type < 5);
 
 		switch (*node_type) {
@@ -1418,12 +1419,12 @@ void print_replay_list(struct replay_list *replay_list)
 
 				// digest_inode(from_dev, g_root_dev, i_item->key.inum, i_item->blknr);
 
-				mlfs_debug("\tstruct inode_replay\n");
-				mlfs_debug("\t\taddr_t blknr: %x\n", i_item->blknr);
-				mlfs_debug("\t\tuint8_t node_type: %d\n", i_item->node_type);
-				mlfs_debug("\t\tuint8_t create: %d\n", i_item->create);
-				mlfs_debug("\t\tuint32_t inum: %d\n", i_item->key.inum);
-				mlfs_debug("\t\tuint16_t ver: %d", i_item->key.ver);
+				printf("\tstruct inode_replay\n");
+				printf("\t\taddr_t blknr: %x\n", i_item->blknr);
+				printf("\t\tuint8_t node_type: %d\n", i_item->node_type);
+				printf("\t\tuint8_t create: %d\n", i_item->create);
+				printf("\t\tuint32_t inum: %d\n", i_item->key.inum);
+				printf("\t\tuint16_t ver: %d", i_item->key.ver);
 				HASH_DEL(replay_list->i_digest_hash, i_item);
 				list_del(l);
 				mlfs_free(i_item);
@@ -1444,14 +1445,14 @@ void print_replay_list(struct replay_list *replay_list)
 				// 		d_item->key.type, d_item->dir_inum, d_item->dir_size, 
 				// 		d_item->key.inum, d_item->blknr);
 
-				mlfs_debug("\tstruct directory_replay\n");
-				mlfs_debug("\t\tint n: %d\n", d_item->n);
-				mlfs_debug("\t\tuint32_t dir_inum: %d\n", d_item->dir_inum);
-				mlfs_debug("\t\tuint32_t dir_size: %d\n" ,d_item->dir_size);
-				mlfs_debug("\t\taddr_t blknr: %d\n", d_item->blknr);
-				mlfs_debug("\t\tuint8_t node_type: %d\n", d_item->node_type);
-				mlfs_debug("\t\tuint32_t inum: %d\n", d_item->key.inum);
-				mlfs_debug("\t\tuint16_t ver: %d", d_item->key.ver);
+				printf("\tstruct directory_replay\n");
+				printf("\t\tint n: %d\n", d_item->n);
+				printf("\t\tuint32_t dir_inum: %d\n", d_item->dir_inum);
+				printf("\t\tuint32_t dir_size: %d\n" ,d_item->dir_size);
+				printf("\t\taddr_t blknr: %d\n", d_item->blknr);
+				printf("\t\tuint8_t node_type: %d\n", d_item->node_type);
+				printf("\t\tuint32_t inum: %d\n", d_item->key.inum);
+				printf("\t\tuint16_t ver: %d", d_item->key.ver);
 				HASH_DEL(replay_list->d_digest_hash, d_item);
 				list_del(l);
 				mlfs_free(d_item);
@@ -1470,11 +1471,11 @@ void print_replay_list(struct replay_list *replay_list)
 				// if (enable_perf_stats) 
 				// 	tsc_begin = asm_rdtscp();
 
-				mlfs_debug("\tstruct file_replay\n");
-				mlfs_debug("\t\tuint8_t node_type: %d\n", f_item->node_type);
-				mlfs_debug("\t\tuint32_t inum: %d\n", f_item->key.inum);
-				mlfs_debug("\t\tuint16_t ver: %d", f_item->key.ver);
-				mlfs_debug("\t\tstruct list_head iovec_list:\n");
+				printf("\tstruct file_replay\n");
+				printf("\t\tuint8_t node_type: %d\n", f_item->node_type);
+				printf("\t\tuint32_t inum: %d\n", f_item->key.inum);
+				printf("\t\tuint16_t ver: %d", f_item->key.ver);
+				printf("\t\tstruct list_head iovec_list:\n");
 
 
 #ifdef FCONCURRENT
@@ -1515,12 +1516,12 @@ void print_replay_list(struct replay_list *replay_list)
 #endif //EXPERIMENTAL
 					// if (dest_dev == g_ssd_dev)
 					// 	mlfs_io_wait(g_ssd_dev, 0);
-					mlfs_debug("\t\t\tstruct file_io_vector\n");
-					mlfs_debug("\t\t\t\toffset_t offset: %d\n", f_iovec->offset);
-					mlfs_debug("\t\t\t\tuint32_t length: %d\n", f_iovec->length);
-					mlfs_debug("\t\t\t\taddr_t blknr: %d\n", f_iovec->blknr);
-					mlfs_debug("\t\t\t\tuint32_t n_list: %d\n", f_iovec->n_list);
-					mlfs_debug("\t\t\t\tstruct list_head iov_blk_list ???\n");
+					printf("\t\t\tstruct file_io_vector\n");
+					printf("\t\t\t\toffset_t offset: %d\n", f_iovec->offset);
+					printf("\t\t\t\tuint32_t length: %d\n", f_iovec->length);
+					printf("\t\t\t\taddr_t blknr: %d\n", f_iovec->blknr);
+					printf("\t\t\t\tuint32_t n_list: %d\n", f_iovec->n_list);
+					printf("\t\t\t\tstruct list_head iov_blk_list ???\n");
 				}
 
 				HASH_DEL(replay_list->f_digest_hash, f_item);
@@ -1534,6 +1535,7 @@ void print_replay_list(struct replay_list *replay_list)
 				break;
 			}
 			case NTYPE_U: {
+    printf("d\n");
 				u_replay_t *u_item;
 				u_item = (u_replay_t *)container_of(l, u_replay_t, list);
 
@@ -1542,10 +1544,10 @@ void print_replay_list(struct replay_list *replay_list)
 
 				// digest_unlink(from_dev, g_root_dev, u_item->key.inum);
 
-				mlfs_debug("\tstruct unlink_replay\n");
-				mlfs_debug("\t\tuint8_t node_type: %d\n", u_item->node_type);
-				mlfs_debug("\t\tuint32_t inum: %d\n", u_item->key.inum);
-				mlfs_debug("\t\tuint16_t ver: %d", u_item->key.ver);
+				printf("\tstruct unlink_replay\n");
+				printf("\t\tuint8_t node_type: %d\n", u_item->node_type);
+				printf("\t\tuint32_t inum: %d\n", u_item->key.inum);
+				printf("\t\tuint16_t ver: %d", u_item->key.ver);
 				HASH_DEL(replay_list->u_digest_hash, u_item);
 				list_del(l);
 				mlfs_free(u_item);
@@ -1591,7 +1593,7 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
 		coalesce_replay_and_optimize(from_dev, loghdr_meta, &replay_list);
 
 	}
-		print_replay_list(&replay_list);
+    print_replay_list(&replay_list);
 }
 
 uint32_t make_digest_request_sync(int percent)
@@ -1613,7 +1615,7 @@ uint32_t make_digest_request_sync(int percent)
 	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
 			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 #ifdef COALESCE
-	int coalesce_count = coalesce_log(g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest);
+	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest);
 #endif
 	mlfs_info("%s\n", cmd);
 
