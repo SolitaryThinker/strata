@@ -148,6 +148,89 @@ typedef struct logheader_meta {
 	uint8_t loghdr_ext[2048];
 } loghdr_meta_t;
 
+// Structs used for coalescing in the kernel digest
+#define NTYPE_I 1
+#define NTYPE_D 2
+#define NTYPE_F 3
+#define NTYPE_U 4
+
+typedef struct replay_node_key
+{
+	uint32_t inum;
+	uint16_t ver;
+} replay_key_t;
+
+/* It is important to place node_type right after struct list_head
+ * since digest_log_from_replay_list compute node_type like this:
+ * node_type = &list + sizeof(struct list_head)
+ */
+typedef struct inode_replay {
+	replay_key_t key;
+	addr_t blknr; 
+	mlfs_hash_t hh;
+	struct list_head list;
+	uint8_t node_type;
+	uint8_t create;
+} i_replay_t;
+
+typedef struct d_replay_key {
+	uint32_t inum;
+	uint16_t ver;
+	uint8_t type;
+} d_replay_key_t;
+
+typedef struct directory_replay {
+	d_replay_key_t key;
+	int n;
+	uint32_t dir_inum;
+	uint32_t dir_size;
+	addr_t blknr;
+	mlfs_hash_t hh;
+	struct list_head list;
+	uint8_t node_type;
+} d_replay_t;
+
+typedef struct block_list {
+	struct list_head list;
+	uint32_t n;
+	addr_t blknr;
+} f_blklist_t;
+
+typedef struct file_io_vector {
+	offset_t hash_key;
+	struct list_head list;
+	offset_t offset;
+	uint32_t length;
+	addr_t blknr; 
+	uint32_t n_list;
+	struct list_head iov_blk_list;
+	mlfs_hash_t hh;
+} f_iovec_t;
+
+typedef struct file_replay {
+	replay_key_t key;
+	struct list_head iovec_list;
+	f_iovec_t *iovec_hash;
+	mlfs_hash_t hh;
+	struct list_head list;
+	uint8_t node_type;
+} f_replay_t;
+
+typedef struct unlink_replay {
+	replay_key_t key;
+	mlfs_hash_t hh;
+	struct list_head list;
+	uint8_t node_type;
+} u_replay_t;
+
+struct replay_list {
+	i_replay_t *i_digest_hash;
+	d_replay_t *d_digest_hash;
+	f_replay_t *f_digest_hash;
+	u_replay_t *u_digest_hash;
+	struct list_head head;
+};
+
 // On-disk inode structure
 struct dinode {
 	uint8_t dev;		// Device id for multi-level storage
