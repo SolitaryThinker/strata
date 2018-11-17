@@ -76,7 +76,7 @@ void init_log(int dev)
 
 	g_fs_log = (struct fs_log *)mlfs_zalloc(sizeof(struct fs_log));
 	g_log_sb = (struct log_superblock *)mlfs_zalloc(sizeof(struct log_superblock));
-	inode_version_table = (uint16_t *)mlfs_zalloc(sizeof(uint16_t * NINODES));
+	inode_version_table = (uint16_t *)mlfs_zalloc(sizeof(uint16_t) * NINODES);
 
 	g_fs_log->log_sb_blk = disk_sb[dev].log_start;
 	g_fs_log->size = disk_sb[dev].nlog;
@@ -350,10 +350,10 @@ static void persist_log_header(struct logheader_meta *loghdr_meta,
 
 	io_bh = bh_get_sync_IO(g_fs_log->dev, hdr_blkno, BH_NO_DATA_ALLOC);
 
-	if (enable_perf_stats) {
-		g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-		g_perf_stats.bcache_search_nr++;
-	}
+	//if (enable_perf_stats) {
+		//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+		//g_perf_stats.bcache_search_nr++;
+	//}
 	//pthread_spin_lock(&io_bh->b_spinlock);
 
 	mlfs_get_time(&loghdr->mtime);
@@ -461,10 +461,10 @@ void commit_log_tx(void)
 		pthread_mutex_unlock(g_log_mutex_shared);
 		mlfs_debug("commit log_tx %u\n", g_fs_log->outstanding);
 #endif
-		if (enable_perf_stats) {
-			g_perf_stats.log_commit_tsc += (asm_rdtscp() - tsc_begin);
-			g_perf_stats.log_commit_nr++;
-		}
+		//if (enable_perf_stats) {
+			//g_perf_stats.log_commit_tsc += (asm_rdtscp() - tsc_begin);
+			//g_perf_stats.log_commit_nr++;
+		//}
 	} else {
 		panic("it has a race condition\n");
 	}
@@ -489,10 +489,10 @@ static int persist_log_inode(struct logheader_meta *loghdr_meta, uint32_t idx)
 
 	log_bh = bh_get_sync_IO(g_fs_log->dev, logblk_no, BH_NO_DATA_ALLOC);
 
-	if (enable_perf_stats) {
-		g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-		g_perf_stats.bcache_search_nr++;
-	}
+	//if (enable_perf_stats) {
+		//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+		//g_perf_stats.bcache_search_nr++;
+	//}
 
 	loghdr->blocks[idx] = logblk_no;
 
@@ -614,10 +614,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		fc_block = fcache_find(inode, key);
 
-		if (enable_perf_stats) {
-			g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
-			g_perf_stats.l0_search_nr++;
-		}
+		//if (enable_perf_stats) {
+			//g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
+			//g_perf_stats.l0_search_nr++;
+		//}
 
 		logblk_no = loghdr_meta->log_blocks + loghdr_meta->pos;
 		loghdr_meta->pos++;
@@ -651,10 +651,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		log_bh = bh_get_sync_IO(g_fs_log->dev, logblk_no, BH_NO_DATA_ALLOC);
 
-		if (enable_perf_stats) {
-			g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-			g_perf_stats.bcache_search_nr++;
-		}
+		//if (enable_perf_stats) {
+			//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+			//g_perf_stats.bcache_search_nr++;
+		//}
 
 		// the logblk_no could be either a new block or existing one (patching case).
 		loghdr->blocks[idx] = logblk_no;
@@ -722,10 +722,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 			fc_block = fcache_find(inode, key);
 
-			if (enable_perf_stats) {
-				g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
-				g_perf_stats.l0_search_nr++;
-			}
+			//if (enable_perf_stats) {
+				//g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
+				//g_perf_stats.l0_search_nr++;
+			//}
 
 			if (!fc_block) {
 				fc_block = fcache_alloc_add(inode, key, logblk_no + k);
@@ -743,9 +743,9 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		bh_release(log_bh);
 
-		if (enable_perf_stats) {
-			g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
-		}
+		//if (enable_perf_stats) {
+			//g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
+		//}
 	}
 
 	return 0;
@@ -898,10 +898,10 @@ static void commit_log(void)
 		 * is followed by log header write */
 		persist_log_blocks(loghdr_meta);
 
-		if (enable_perf_stats) {
-			tsc_end = asm_rdtscp();
-			g_perf_stats.log_write_tsc += (tsc_end - tsc_begin);
-		}
+		//if (enable_perf_stats) {
+			//tsc_end = asm_rdtscp();
+			//g_perf_stats.log_write_tsc += (tsc_end - tsc_begin);
+		//}
 
 #if 0
 		if(loghdr->next_loghdr_blkno != g_fs_log->next_avail_header) {
@@ -917,10 +917,10 @@ static void commit_log(void)
 		// Write log header to log area (real commit)
 		persist_log_header(loghdr_meta, loghdr_meta->hdr_blkno);
 
-		if (enable_perf_stats) {
-			tsc_end = asm_rdtscp();
-			g_perf_stats.loghdr_write_tsc += (tsc_end - tsc_begin);
-		}
+		//if (enable_perf_stats) {
+			//tsc_end = asm_rdtscp();
+			//g_perf_stats.loghdr_write_tsc += (tsc_end - tsc_begin);
+		//}
 
 		atomic_fetch_add(&g_log_sb->n_digest, 1);
 
@@ -1013,11 +1013,11 @@ void wait_on_digesting()
 	while(g_fs_log->digesting)
 		cpu_relax();
 
-	if (enable_perf_stats) {
-		tsc_end = asm_rdtsc();
-		g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
-		g_perf_stats.digest_wait_nr++;
-	}
+	//if (enable_perf_stats) {
+		//tsc_end = asm_rdtsc();
+		//g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
+		//g_perf_stats.digest_wait_nr++;
+	//}
 }
 
 int make_digest_request_async(int percent)
@@ -1036,7 +1036,7 @@ int make_digest_request_async(int percent)
 		return -EBUSY;
 }
 
-static void coalesce_replay_and_optimize(uint8_t from_dev, 
+void coalesce_replay_and_optimize(uint8_t from_dev, 
 		loghdr_meta_t *loghdr_meta, struct replay_list *replay_list)
 {	
 	int i, ret;
@@ -1082,8 +1082,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 				}
 				// move blknr to point the up-to-date inode snapshot in the log.
 				item->blknr = loghdr->blocks[i];
-				if (enable_perf_stats)
-					g_perf_stats.n_digest++;
+				/*if (enable_perf_stats)*/
+					/*g_perf_stats.n_digest++;*/
 				break;
 			}
 			case L_TYPE_DIR_DEL: 
@@ -1116,8 +1116,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 				item->dir_inum = loghdr->inode_no[i];
 				item->dir_size = loghdr->length[i];
 				item->blknr = loghdr_meta->hdr_blkno;
-				if (enable_perf_stats)
-					g_perf_stats.n_digest++;
+				//if (enable_perf_stats)
+					//g_perf_stats.n_digest++;
 				break;
 			}
 			case L_TYPE_FILE: {
@@ -1238,8 +1238,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 				}
 #endif
 
-				if (enable_perf_stats)
-					g_perf_stats.n_digest++;
+				//if (enable_perf_stats)
+					//g_perf_stats.n_digest++;
 				break;
 			}
 			case L_TYPE_UNLINK: {
@@ -1279,8 +1279,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->i_digest_hash, i_item);
 					list_del(&i_item->list);
 					mlfs_free(i_item);
-					if (enable_perf_stats)
-						g_perf_stats.n_digest_skipped++;
+					//if (enable_perf_stats)
+						//g_perf_stats.n_digest_skipped++;
 				} else {
 					// the unlink must be applied. create a new unlink item.
 					u_item = (u_replay_t *)mlfs_zalloc(sizeof(u_replay_t));
@@ -1291,8 +1291,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 					list_add_tail(&u_item->list, &replay_list->head);
 					mlfs_debug("[ULINK] inum %u (ver %u)\n", 
 							u_item->key.inum, u_item->key.ver);
-					if (enable_perf_stats)
-						g_perf_stats.n_digest++;
+					//if (enable_perf_stats)
+						//g_perf_stats.n_digest++;
 				}
 
 #if 0
@@ -1322,8 +1322,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->d_digest_hash, d_item);
 					list_del(&d_item->list);
 					mlfs_free(d_item);
-					if (enable_perf_stats)
-						g_perf_stats.n_digest_skipped++;
+					//if (enable_perf_stats)
+						//g_perf_stats.n_digest_skipped++;
 				}
 
 				d_search.key.inum = inum;
@@ -1339,8 +1339,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->d_digest_hash, d_item);
 					list_del(&d_item->list);
 					mlfs_free(d_item);
-					if (enable_perf_stats)
-						g_perf_stats.n_digest_skipped++;
+					//if (enable_perf_stats)
+						//g_perf_stats.n_digest_skipped++;
 				}
 
 				// unlink digest must happens before directory delete digest.
@@ -1359,8 +1359,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 					list_del(&d_item->list);
 					mlfs_free(d_item);
 					
-					if (enable_perf_stats)
-						g_perf_stats.n_digest_skipped++;
+					//if (enable_perf_stats)
+						//g_perf_stats.n_digest_skipped++;
 				}
 
 				// delete file digest info.
@@ -1376,8 +1376,8 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 						list_del(&f_iovec->list);
 						mlfs_free(f_iovec);
 						
-						if (enable_perf_stats)
-							g_perf_stats.n_digest_skipped++;
+						//if (enable_perf_stats)
+							//g_perf_stats.n_digest_skipped++;
 					}
 
 					HASH_DEL(replay_list->f_digest_hash, f_item);
@@ -1397,7 +1397,7 @@ static void coalesce_replay_and_optimize(uint8_t from_dev,
 	}
 }
 
-static void print_replay_list(struct replay_list *replay_list)
+void print_replay_list(struct replay_list *replay_list)
 {
 	struct list_head *l, *tmp;
 	uint8_t *node_type;
@@ -1560,17 +1560,17 @@ static void print_replay_list(struct replay_list *replay_list)
 	}
 }
 
-static void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
+void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
 {
 	loghdr_meta_t *loghdr_meta;
 	int i, n_digest;
 	uint64_t tsc_begin;
 	static addr_t previous_loghdr_blk;
-	struct replay list replay_list = {
+	struct replay_list replay_list = {
 		.i_digest_hash = NULL,
 		.d_digest_hash = NULL,
 		.f_digest_hash = NULL,
-		.u_digest_hard = NULL,
+		.u_digest_hash = NULL,
 	};
 
 	INIT_LIST_HEAD(&replay_list.head);
@@ -1579,11 +1579,11 @@ static void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest
 
 	// coalesce log entries
 	for (i = 0; i < n_hdrs; ++i) {
-		loghdr_meta = read_log_header_meta(from_dev, *loghdr_expect_to_digest);
+		loghdr_meta = read_log_header_meta(from_dev, *loghdr_to_digest);
 
 		// if this log header was not committed, then skip over it
 		if (loghdr_meta->loghdr->inuse != LH_COMMIT_MAGIC) {
-			mlfs_assert(loghdr_meta->loghdr->inuse == 0)
+			mlfs_assert(loghdr_meta->loghdr->inuse == 0);
 			mlfs_free(loghdr_meta);
 			break;
 		}
@@ -1613,7 +1613,7 @@ uint32_t make_digest_request_sync(int percent)
 	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
 			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 #ifdef COALESCE
-	coalesce_count = coalesce_log(g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest);
+	int coalesce_count = coalesce_log(g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest);
 #endif
 	mlfs_info("%s\n", cmd);
 
