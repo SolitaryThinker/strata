@@ -1593,6 +1593,19 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
 
 		coalesce_replay_and_optimize(from_dev, loghdr_meta, &replay_list);
 
+		// rotated when next_loghdr_blkno jumps to beginning of the log.
+		// FIXME: instead of this condition, it would be better if 
+		// *loghdr_to_digest > the lost block of application log.
+		if (*loghdr_to_digest > loghdr_meta->loghdr->next_loghdr_blkno) {
+			mlfs_debug("loghdr_to_digest %lu, next header %lu\n",
+					*loghdr_to_digest, loghdr_meta->loghdr->next_loghdr_blkno);
+		}
+
+		*loghdr_to_digest = loghdr_meta->loghdr->next_loghdr_blkno;
+
+		previous_loghdr_blk = loghdr_meta->hdr_blkno;
+
+		mlfs_free(loghdr_meta);
 	}
     //print_replay_list(&replay_list);
 }
