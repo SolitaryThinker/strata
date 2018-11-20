@@ -1188,6 +1188,7 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 				f_iovec->length = loghdr->length[i];
 				f_iovec->offset = loghdr->data[i];
 				f_iovec->blknr = loghdr->blocks[i];
+                printf("length: %d | offset: %d | blknr: %d \n", f_iovec->length, f_iovec->offset, f_iovec->blknr);
 				INIT_LIST_HEAD(&f_iovec->list);
 				list_add_tail(&f_iovec->list, &item->iovec_list);
 #endif	//IOMERGE
@@ -1593,7 +1594,7 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
 		coalesce_replay_and_optimize(from_dev, loghdr_meta, &replay_list);
 
 	}
-    print_replay_list(&replay_list);
+    //print_replay_list(&replay_list);
 }
 
 uint32_t make_digest_request_sync(int percent)
