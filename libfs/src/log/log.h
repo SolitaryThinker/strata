@@ -19,8 +19,12 @@ struct log_superblock {
 	addr_t start_digest;
 	// # of loghdr to digest
 	atomic_uint n_digest;
-	
+
 	addr_t loghdr_expect_to_digest;
+
+    addr_t secure_start_digest;
+    atomic_uint n_secure_digest;
+    addr_t loghdr_expect_to_digest_secure;
 };
 
 // In-memory metadata for log area.

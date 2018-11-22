@@ -41,6 +41,7 @@
  */
 
 struct fs_log *g_fs_log;
+struct fs_log *g_fs_log_secure;
 struct log_superblock *g_log_sb;
 
 // for coalescing
@@ -75,6 +76,7 @@ void init_log(int dev)
 	}
 
 	g_fs_log = (struct fs_log *)mlfs_zalloc(sizeof(struct fs_log));
+    g_fs_log_secure = (struct fs_log *)mlfs_zalloc(sizeof(struct fs_log));
 	g_log_sb = (struct log_superblock *)mlfs_zalloc(sizeof(struct log_superblock));
 	inode_version_table = (uint16_t *)mlfs_zalloc(sizeof(uint16_t) * NINODES);
 
@@ -83,12 +85,27 @@ void init_log(int dev)
 	g_fs_log->dev = dev;
 	g_fs_log->nloghdr = 0;
 
+    printf("original size of the log: %lx | original superblock number %lx\n", g_fs_log->size, g_fs_log->log_sb_blk);
+
 	ret = pipe(g_fs_log->digest_fd);
 	if (ret < 0) 
 		panic("cannot create pipe for digest\n");
 
 	read_log_superblock(g_log_sb);
 
+    // Need to split the log into secure and unsecure sections
+    // reserve 30% of the log for the coalesced digest
+    g_log_sb->secure_start_digest = disk_sb[dev].log_start + (g_fs_log->size - ((30 * g_fs_log->size) / 100)) + 1;
+    g_log_sb->loghdr_expect_to_digest_secure = 0;
+
+    // Size of the secure log is 30% of the the regular log
+    g_fs_log_secure->size = ((30 * g_fs_log->size) / 100) - 1;
+    g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
+    g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
+    g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
+
+    // Set the secure log size to 70% of the true size
+    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
 	g_fs_log->log_sb = g_log_sb;
 
 	// Assuming all logs are digested by recovery.
@@ -96,12 +113,15 @@ void init_log(int dev)
 	g_fs_log->next_avail = g_fs_log->next_avail_header + 1; 
 	g_fs_log->start_blk = disk_sb[dev].log_start + 1;
 
-	mlfs_debug("end of the log %lx\n", g_fs_log->start_blk + g_fs_log->size);
+	printf("start of the log %lx | end of the log %lx\n", g_fs_log->start_blk,  g_fs_log->start_blk + g_fs_log->size);
+    printf("start of the secure log %lx | end of the secure log %lx\n", g_fs_log_secure->start_blk, g_fs_log_secure->start_blk + g_fs_log_secure->size);
+    printf("block number of the super block %lx | size of the overall log %lx\n", disk_sb[dev].log_start, disk_sb[dev].nlog);
 
 	g_log_sb->start_digest = g_fs_log->next_avail_header;
 
 	write_log_superblock(g_log_sb);
 
+    atomic_init(&g_log_sb->n_secure_digest, 0);
 	atomic_init(&g_log_sb->n_digest, 0);
 
 	//g_fs_log->outstanding = 0;
@@ -784,9 +804,11 @@ static uint32_t compute_log_blocks(struct logheader_meta *loghdr_meta)
 
 				if (size < g_block_size_bytes)
 					nr_log_blocks++;
-				else
+				else {
+                    mlfs_assert(!(size % g_block_size_bytes));
 					nr_log_blocks += 
 						(size >> g_block_size_shift);
+                }
 				n_iovec++;
 				break;
 			}
@@ -1188,7 +1210,6 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 				f_iovec->length = loghdr->length[i];
 				f_iovec->offset = loghdr->data[i];
 				f_iovec->blknr = loghdr->blocks[i];
-                printf("length: %d | offset: %d | blknr: %d \n", f_iovec->length, f_iovec->offset, f_iovec->blknr);
 				INIT_LIST_HEAD(&f_iovec->list);
 				list_add_tail(&f_iovec->list, &item->iovec_list);
 #endif	//IOMERGE
@@ -1536,7 +1557,6 @@ void print_replay_list(struct replay_list *replay_list)
 				break;
 			}
 			case NTYPE_U: {
-    printf("d\n");
 				u_replay_t *u_item;
 				u_item = (u_replay_t *)container_of(l, u_replay_t, list);
 
