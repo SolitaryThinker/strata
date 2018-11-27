@@ -1583,7 +1583,7 @@ void print_replay_list(struct replay_list *replay_list)
 	}
 }
 
-void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
+void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
 {
 	loghdr_meta_t *loghdr_meta;
 	int i, n_digest;
@@ -1619,6 +1619,7 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest)
 		if (*loghdr_to_digest > loghdr_meta->loghdr->next_loghdr_blkno) {
 			mlfs_debug("loghdr_to_digest %lu, next header %lu\n",
 					*loghdr_to_digest, loghdr_meta->loghdr->next_loghdr_blkno);
+			*rotated = 1;
 		}
 
 		*loghdr_to_digest = loghdr_meta->loghdr->next_loghdr_blkno;
@@ -1648,8 +1649,10 @@ uint32_t make_digest_request_sync(int percent)
 	socklen_t len = sizeof(struct sockaddr_un);
 	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
 			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
+	
+	rotated = 0;
 #ifdef COALESCE
-	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest);
+	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &rotated);
 #endif
 	mlfs_info("%s\n", cmd);
 
