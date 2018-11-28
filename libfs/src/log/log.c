@@ -47,6 +47,8 @@ struct log_superblock *g_log_sb;
 // for coalescing
 uint16_t *inode_version_table;
 int log_rotated_during_coalescing;
+int coalesce_count;
+addr_t digest_blkno;
 
 // for communication with kernel fs.
 int g_sock_fd;
@@ -1778,15 +1780,17 @@ uint32_t make_digest_request_sync(int percent)
 	n_digest = atomic_load(&g_log_sb->n_digest);
 
 	g_fs_log->n_digest_req = (percent * n_digest) / 100;
-	socklen_t len = sizeof(struct sockaddr_un);
-	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
-			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 	
 #ifdef COALESCE
 	log_rotated_during_coalescing = 0;
-    coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &log_rotated_during_coalescing);
-	printf("++++++++++++++LOG HAS ROTATED+++++++++++++++\n");
+	coalesce_count = 0;
+	digest_blkno = &g_log_sb->start_digest;
+    coalesce_count = coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &digest_blkno, &log_rotated_during_coalescing);
 #endif
+
+	socklen_t len = sizeof(struct sockaddr_un);
+	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
+			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 	mlfs_info("%s\n", cmd);
 
 	// send digest command
