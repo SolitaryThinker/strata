@@ -46,7 +46,7 @@ struct log_superblock *g_log_sb;
 
 // for coalescing
 uint16_t *inode_version_table;
-uint8_t log_rotated_during_coalescing;
+int log_rotated_during_coalescing;
 
 // for communication with kernel fs.
 int g_sock_fd;
@@ -298,7 +298,7 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 		// The 30% is ad-hoc parameter: In genernal, 30% ~ 40% shows good performance
 		// in all workloads
 		if (nr_used_blk > ((30 * log_metadata->size) / 100) && !use_secure_log) {
-			mlfs_assert(!use_secure_log)
+			mlfs_assert(!use_secure_log);
 			// digest 90% of log.
 			while(make_digest_request_async(100) != -EBUSY)
 			mlfs_info("%s", "[L] log is getting full. asynchronous digest!\n");
@@ -918,7 +918,7 @@ static void commit_log(void)
 
 		loghdr_meta->hdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
 		if (!loghdr_meta->secure_log) {
-			mlfs_assert(g_fs_log->digesting)
+			mlfs_assert(g_fs_log->digesting);
 			g_fs_log->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
 		} else {
 			g_fs_log_secure->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
