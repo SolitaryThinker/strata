@@ -1801,11 +1801,12 @@ uint32_t make_digest_request_sync(int percent)
     mlfs_info("%s", "Before Coalesce Logs\n");
     coalesce_count = coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &digest_blkno, &log_rotated_during_coalescing);
     mlfs_info("%s", "+++++++++++++++++++++++++++COALESCED!!!!!!!!!!!!!!!!!!!!\n");
+    g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
 #endif
 
 	socklen_t len = sizeof(struct sockaddr_un);
 	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
-			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
+			g_fs_log_secure->dev, g_fs_log_secure->n_digest_req, g_log_sb->secure_start_digest, 0UL);
 	mlfs_info("%s\n", cmd);
 
 	// send digest command
@@ -1841,7 +1842,7 @@ void handle_digest_response(char *ack_cmd)
 	sscanf(ack_cmd, "|%s |%d|%lu|%d|%d|", ack, &n_digested, 
 			&next_hdr_of_digested_hdr, &rotated, &lru_updated);
 
-	if (g_fs_log->n_digest_req == n_digested)  {
+	if (g_fs_log_secure->n_digest_req == n_digested)  {
 		mlfs_info("%s", "digest is done correctly\n");
 		mlfs_info("%s", "-----------------------------------\n");
 	} else {
@@ -1853,17 +1854,17 @@ void handle_digest_response(char *ack_cmd)
 	mlfs_debug("g_fs_log->start_blk %lx, next_hdr_of_digested_hdr %lx\n",
 			g_fs_log->start_blk, next_hdr_of_digested_hdr);
 
-	if (rotated) {
+	if (log_rotated_during_coalescing) {
 		g_fs_log->start_version++;
 		mlfs_debug("g_fs_log start_version = %d\n", g_fs_log->start_version);
 	}
 
 	// change start_blk
-	g_fs_log->start_blk = next_hdr_of_digested_hdr;
-	g_log_sb->start_digest = next_hdr_of_digested_hdr;
+	g_fs_log->start_blk = digest_blkno;
+	g_log_sb->start_digest = digest_blkno;
 
 	// adjust g_log_sb->n_digest properly
-	atomic_fetch_sub(&g_log_sb->n_digest, n_digested);
+	atomic_fetch_sub(&g_log_sb->n_digest, coalesce_count);
 
 	// reset the secure log
 	g_fs_log_secure->size = disk_sb[g_fs_log_secure->dev].nlog;
