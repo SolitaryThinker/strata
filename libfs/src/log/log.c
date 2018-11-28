@@ -1715,7 +1715,7 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 	}
 }
 
-void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
+int coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
 {
 	loghdr_meta_t *loghdr_meta;
 	int i, n_coalesce;
