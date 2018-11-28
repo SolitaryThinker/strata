@@ -98,17 +98,13 @@ void init_log(int dev)
 
     // Need to split the log into secure and unsecure sections
     // reserve 30% of the log for the coalesced digest
-    g_log_sb->secure_start_digest = (g_fs_log->size - ((30 * g_fs_log->size) / 100)) + 1;
-    g_log_sb->loghdr_expect_to_digest_secure = 0;
-
-    // Size of the secure log is 30% of the the regular log
     g_fs_log_secure->size = g_fs_log->size;
-    g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
+    g_fs_log_secure->next_avail_header = (g_fs_log->size - ((30 * g_fs_log->size) / 100));
     g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
     g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
 
     // Set the secure log size to 70% of the true size
-    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - g_fs_log->log_sb_blk - 1;
+    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
 	g_fs_log->log_sb = g_log_sb;
 
 	// Assuming all logs are digested by recovery.
@@ -116,11 +112,12 @@ void init_log(int dev)
 	g_fs_log->next_avail = g_fs_log->next_avail_header + 1;
 	g_fs_log->start_blk = disk_sb[dev].log_start + 1;
 
-	printf("start of the log %lx | end of the log %lx\n", g_fs_log->start_blk,  g_fs_log->start_blk + g_fs_log->size);
+	printf("start of the log %lx | end of the log %lx\n", g_fs_log->start_blk, g_fs_log->size);
     printf("start of the secure log %lx | end of the secure log %lx\n", g_fs_log_secure->start_blk, g_fs_log_secure->size);
     printf("block number of the super block %lx | size of the overall log %lx\n", disk_sb[dev].log_start, disk_sb[dev].nlog);
 
 	g_log_sb->start_digest = g_fs_log->next_avail_header;
+	g_log_sb->secure_start_digest = g_fs_log_secure->next_avail_header;
 
 	write_log_superblock(g_log_sb);
 
@@ -968,6 +965,8 @@ static void commit_log(void)
 
 		if (!loghdr_meta->secure_log) {
 			atomic_fetch_add(&g_log_sb->n_digest, 1);
+		} else {
+			atomic_fetch_add(&g_fs_log_secure->n_digest, 1);
 		}
 
 		mlfs_assert(loghdr_meta->loghdr->next_loghdr_blkno
@@ -1852,6 +1851,15 @@ void handle_digest_response(char *ack_cmd)
 
 	// adjust g_log_sb->n_digest properly
 	atomic_fetch_sub(&g_log_sb->n_digest, n_digested);
+
+	// reset the secure log
+	g_fs_log_secure->size = disk_sb[dev].nlog;
+	g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
+	g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
+	g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
+	g_fs_log_secure->start_digest =  g_fs_log_secure->next_avail_header;
+
+	atomic_init(&g_log_sb->n_secure_digest, 0);
 
 	//Start cleanup process after digest is done.
 
