@@ -1718,7 +1718,7 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
 {
 	loghdr_meta_t *loghdr_meta;
-	int i, n_digest;
+	int i, n_coalesce;
 	uint64_t tsc_begin;
 	static addr_t previous_loghdr_blk;
 	struct replay_list replay_list = {
@@ -1763,6 +1763,9 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *
     //print_replay_list(&replay_list);
 
 	copy_log_from_replay_list(from_dev, &replay_list);
+
+	n_coalesce = i;
+	return n_coalesce;
 }
 
 uint32_t make_digest_request_sync(int percent)
