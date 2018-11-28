@@ -46,6 +46,7 @@ struct log_superblock *g_log_sb;
 
 // for coalescing
 uint16_t *inode_version_table;
+uint8_t log_rotated_during_coalescing;
 
 // for communication with kernel fs.
 int g_sock_fd;
@@ -1760,8 +1761,8 @@ uint32_t make_digest_request_sync(int percent)
 			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 	
 #ifdef COALESCE
-	rotated = 0;
-	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &rotated);
+	log_rotated_during_coalescing = 0;
+	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &log_rotated_during_coalescing);
 	printf("++++++++++++++LOG HAS ROTATED+++++++++++++++\n");
 #endif
 	mlfs_info("%s\n", cmd);
