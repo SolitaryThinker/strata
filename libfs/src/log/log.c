@@ -966,7 +966,7 @@ static void commit_log(void)
 		if (!loghdr_meta->secure_log) {
 			atomic_fetch_add(&g_log_sb->n_digest, 1);
 		} else {
-			atomic_fetch_add(&g_fs_log_secure->n_digest, 1);
+			atomic_fetch_add(&g_log_sb->n_secure_digest, 1);
 		}
 
 		mlfs_assert(loghdr_meta->loghdr->next_loghdr_blkno
@@ -1853,11 +1853,11 @@ void handle_digest_response(char *ack_cmd)
 	atomic_fetch_sub(&g_log_sb->n_digest, n_digested);
 
 	// reset the secure log
-	g_fs_log_secure->size = disk_sb[dev].nlog;
+	g_fs_log_secure->size = disk_sb[g_fs_log_secure->dev].nlog;
 	g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
 	g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
 	g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
-	g_fs_log_secure->start_digest =  g_fs_log_secure->next_avail_header;
+	g_log_sb->secure_start_digest =  g_fs_log_secure->next_avail_header;
 
 	atomic_init(&g_log_sb->n_secure_digest, 0);
 
