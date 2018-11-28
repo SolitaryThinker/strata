@@ -100,18 +100,18 @@ void init_log(int dev)
     g_log_sb->loghdr_expect_to_digest_secure = 0;
 
     // Size of the secure log is 30% of the the regular log
-    g_fs_log_secure->size = ((30 * g_fs_log->size) / 100) - 1;
+    g_fs_log_secure->size = g_fs_log->size;
     g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
     g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
     g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
 
     // Set the secure log size to 70% of the true size
-    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
+    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - g_fs_log->log_sb_blk - 1;
 	g_fs_log->log_sb = g_log_sb;
 
 	// Assuming all logs are digested by recovery.
 	g_fs_log->next_avail_header = disk_sb[dev].log_start + 1; // +1: log superblock
-	g_fs_log->next_avail = g_fs_log->next_avail_header + 1; 
+	g_fs_log->next_avail = g_fs_log->next_avail_header + 1;
 	g_fs_log->start_blk = disk_sb[dev].log_start + 1;
 
 	printf("start of the log %lx | end of the log %lx\n", g_fs_log->start_blk,  g_fs_log->start_blk + g_fs_log->size);
@@ -1784,7 +1784,7 @@ uint32_t make_digest_request_sync(int percent)
 	
 #ifdef COALESCE
 	log_rotated_during_coalescing = 0;
-	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &log_rotated_during_coalescing);
+    coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &log_rotated_during_coalescing);
 	printf("++++++++++++++LOG HAS ROTATED+++++++++++++++\n");
 #endif
 	mlfs_info("%s\n", cmd);
@@ -1834,7 +1834,7 @@ void handle_digest_response(char *ack_cmd)
 	mlfs_debug("g_fs_log->start_blk %lx, next_hdr_of_digested_hdr %lx\n",
 			g_fs_log->start_blk, next_hdr_of_digested_hdr);
 
-	if (log_rotated_during_coalescing) {
+	if (rotated || log_rotated_during_coalescing) {
 		g_fs_log->start_version++;
 		mlfs_debug("g_fs_log start_version = %d\n", g_fs_log->start_version);
 	}
