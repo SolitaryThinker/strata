@@ -104,6 +104,8 @@ void init_log(int dev)
     g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
     g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
     g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
+	g_fs_log_secure->dev = dev;
+	g_fs_log_secure->nloghdr = 0;
 
     // Set the secure log size to 70% of the true size
     g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
@@ -258,9 +260,17 @@ static loghdr_meta_t *read_log_header_meta(uint16_t from_dev, addr_t hdr_addr)
 inline addr_t log_alloc(uint32_t nr_blocks)
 {
 	int ret;
+	struct fs_log *log_metadata;
+	uint8_t use_secure_log = get_loghdr_meta()->secure_log;
+	if (use_secure_log) {
+		mlfs_assert(g_fs_log->digesting);
+		log_metadata = g_fs_log_secure;
+	} else {
+		log_metadata = g_fs_log;
+	}
 
 	/* g_fs_log->start_blk : header
-	 * g_fs_log->next_avail : tail 
+	 * g_fs_log->next_avail : tail
 	 *
 	 * There are two cases:
 	 *
@@ -275,20 +285,20 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 	//mlfs_assert(g_fs_log->avail_version - g_fs_log->start_version < 2);
 
 	// Log is getting full. make asynchronous digest request.
-	if (!g_fs_log->digesting) {
+	if (!log_metadata->digesting) {
 		addr_t nr_used_blk = 0;
-		if (g_fs_log->avail_version == g_fs_log->start_version) {
-			mlfs_assert(g_fs_log->next_avail >= g_fs_log->start_blk);
-			nr_used_blk = g_fs_log->next_avail - g_fs_log->start_blk; 
+		if (log_metadata->avail_version == log_metadata->start_version) {
+			mlfs_assert(log_metadata->next_avail >= log_metadata->start_blk);
+			nr_used_blk = log_metadata->next_avail - log_metadata->start_blk; 
 		} else {
-			nr_used_blk = (g_fs_log->size - g_fs_log->start_blk);
-			nr_used_blk += (g_fs_log->next_avail - g_fs_log->log_sb_blk);
+			nr_used_blk = (log_metadata->size - log_metadata->start_blk);
+			nr_used_blk += (log_metadata->next_avail - log_metadata->log_sb_blk);
 		}
 
 		// The 30% is ad-hoc parameter: In genernal, 30% ~ 40% shows good performance
 		// in all workloads
-		if (nr_used_blk > ((30 * g_fs_log->size) / 100)) {
-
+		if (nr_used_blk > ((30 * log_metadata->size) / 100) && !use_secure_log) {
+			mlfs_assert(!use_secure_log)
 			// digest 90% of log.
 			while(make_digest_request_async(100) != -EBUSY)
 			mlfs_info("%s", "[L] log is getting full. asynchronous digest!\n");
@@ -296,25 +306,26 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 	}
 
 	// next_avail reaches the end of log. 
-	//if (g_fs_log->next_avail + nr_blocks > g_fs_log->log_sb_blk + g_fs_log->size) {
-	if (g_fs_log->next_avail + nr_blocks > g_fs_log->size) {
-		g_fs_log->next_avail = g_fs_log->log_sb_blk + 1;
+	//if (log_metadata->next_avail + nr_blocks > log_metadata->log_sb_blk + log_metadata->size) {
+	if (log_metadata->next_avail + nr_blocks > log_metadata->size) {
+		mlfs_assert(!use_secure_log);
+		log_metadata->next_avail = log_metadata->log_sb_blk + 1;
 
-		atomic_add(&g_fs_log->avail_version, 1);
+		atomic_add(&log_metadata->avail_version, 1);
 
-		mlfs_debug("-- log tail is rotated: new start %lu\n", g_fs_log->next_avail);
+		mlfs_debug("-- log tail is rotated: new start %lu\n", log_metadata->next_avail);
 	}
 
 	addr_t next_log_blk = 
-		__sync_fetch_and_add(&g_fs_log->next_avail, nr_blocks);
+		__sync_fetch_and_add(&log_metadata->next_avail, nr_blocks);
 
 	// This has many policy questions.
 	// Current implmentation is very converative.
 	// Pondering the way of optimization.
 retry:
-	if (g_fs_log->avail_version > g_fs_log->start_version) {
-		if (g_fs_log->start_blk - g_fs_log->next_avail
-				< (g_fs_log->size/ 5)) {
+	if (log_metadata->avail_version > log_metadata->start_version && !use_secure_log) {
+		if (log_metadata->start_blk - log_metadata->next_avail
+				< (log_metadata->size/ 5)) {
 			mlfs_info("%s", "\x1B[31m [L] synchronous digest request and wait! \x1B[0m\n");
 			while (make_digest_request_async(95) != -EBUSY);
 
@@ -323,8 +334,8 @@ retry:
 		}
 	}
 
-	if (g_fs_log->avail_version > g_fs_log->start_version) {
-		if (g_fs_log->next_avail > g_fs_log->start_blk) 
+	if (log_metadata->avail_version > log_metadata->start_version && !use_secure_log) {
+		if (log_metadata->next_avail > log_metadata->start_blk) 
 			goto retry;
 	}
 
@@ -534,8 +545,10 @@ static int persist_log_inode(struct logheader_meta *loghdr_meta, uint32_t idx)
 
 	nr_logblocks = 1;
 
-	mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail);
-	mlfs_assert(log_bh->b_dev == g_fs_log->dev);
+	if (!loghdr_meta->secure_log) {
+		mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail);
+		mlfs_assert(log_bh->b_dev == g_fs_log->dev);
+	}
 
 	mlfs_debug("inum %u offset %lu @ blockno %lx\n",
 				loghdr->inode_no[idx], loghdr->data[idx], logblk_no);
@@ -576,9 +589,10 @@ static int persist_log_directory_unopt(struct logheader_meta *loghdr_meta, uint3
 
 	nr_logblocks = 1;
 
-	mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail);
-	mlfs_assert(log_bh->b_dev == g_fs_log->dev);
-
+	if (!loghdr_meta->secure_log) {
+		mlfs_assert(log_bh->b_blocknr < g_fs_log->next_avail);
+		mlfs_assert(log_bh->b_dev == g_fs_log->dev);
+	}
 	mlfs_debug("inum %u offset %lu @ blockno %lx\n",
 				loghdr->inode_no[idx], loghdr->data[idx], logblk_no);
 
@@ -902,10 +916,15 @@ static void commit_log(void)
 		// loghdr_meta->pos = 0 is used for log header block.
 		loghdr_meta->pos = 1;
 
-		loghdr_meta->hdr_blkno = g_fs_log->next_avail_header;
-		g_fs_log->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
+		loghdr_meta->hdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
+		if (!loghdr_meta->secure_log) {
+			mlfs_assert(g_fs_log->digesting)
+			g_fs_log->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
+		} else {
+			g_fs_log_secure->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
+		}
 
-		loghdr->next_loghdr_blkno = g_fs_log->next_avail_header;
+		loghdr->next_loghdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
 		loghdr->inuse = LH_COMMIT_MAGIC;
 
 		pthread_mutex_unlock(g_fs_log->shared_log_lock);
@@ -946,7 +965,9 @@ static void commit_log(void)
 			//g_perf_stats.loghdr_write_tsc += (tsc_end - tsc_begin);
 		//}
 
-		atomic_fetch_add(&g_log_sb->n_digest, 1);
+		if (!loghdr_meta->secure_log) {
+			atomic_fetch_add(&g_log_sb->n_digest, 1);
+		}
 
 		mlfs_assert(loghdr_meta->loghdr->next_loghdr_blkno
 				>= g_fs_log->log_sb_blk);
@@ -973,8 +994,10 @@ void add_to_loghdr(uint8_t type, struct inode *inode, offset_t data,
 
 	loghdr = loghdr_meta->loghdr;
 
-	if (loghdr->n >= g_fs_log->size)
+	if (loghdr->n >= g_fs_log->size && !loghdr_meta->secure_log)
 		panic("too big a transaction for log");
+	if (loghdr_meta->secure_log)
+		mlfs_assert(loghdr->n < g_fs_log_secure->size);
 
 	/*
 		 if (g_fs_log->outstanding < 1)
@@ -1812,7 +1835,7 @@ void handle_digest_response(char *ack_cmd)
 	mlfs_debug("g_fs_log->start_blk %lx, next_hdr_of_digested_hdr %lx\n",
 			g_fs_log->start_blk, next_hdr_of_digested_hdr);
 
-	if (rotated) {
+	if (log_rotated_during_coalescing) {
 		g_fs_log->start_version++;
 		mlfs_debug("g_fs_log start_version = %d\n", g_fs_log->start_version);
 	}
