@@ -917,11 +917,11 @@ static void commit_log(void)
 		loghdr_meta->pos = 1;
 
 		loghdr_meta->hdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
-		if (!loghdr_meta->secure_log) {
+		if (loghdr_meta->secure_log) {
 			mlfs_assert(g_fs_log->digesting);
-			g_fs_log->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
-		} else {
 			g_fs_log_secure->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
+		} else {
+			g_fs_log->next_avail_header = loghdr_meta->log_blocks + loghdr_meta->nr_log_blocks;
 		}
 
 		loghdr->next_loghdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
