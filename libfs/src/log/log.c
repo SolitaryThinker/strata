@@ -1583,56 +1583,6 @@ void print_replay_list(struct replay_list *replay_list)
 	}
 }
 
-void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
-{
-	loghdr_meta_t *loghdr_meta;
-	int i, n_digest;
-	uint64_t tsc_begin;
-	static addr_t previous_loghdr_blk;
-	struct replay_list replay_list = {
-		.i_digest_hash = NULL,
-		.d_digest_hash = NULL,
-		.f_digest_hash = NULL,
-		.u_digest_hash = NULL,
-	};
-
-	INIT_LIST_HEAD(&replay_list.head);
-	
-	memset(inode_version_table, 0, sizeof(uint16_t) * NINODES);
-
-	// coalesce log entries
-	for (i = 0; i < n_hdrs; ++i) {
-		loghdr_meta = read_log_header_meta(from_dev, *loghdr_to_digest);
-
-		// if this log header was not committed, then skip over it
-		if (loghdr_meta->loghdr->inuse != LH_COMMIT_MAGIC) {
-			mlfs_assert(loghdr_meta->loghdr->inuse == 0);
-			mlfs_free(loghdr_meta);
-			break;
-		}
-
-		coalesce_replay_and_optimize(from_dev, loghdr_meta, &replay_list);
-
-		// rotated when next_loghdr_blkno jumps to beginning of the log.
-		// FIXME: instead of this condition, it would be better if 
-		// *loghdr_to_digest > the lost block of application log.
-		if (*loghdr_to_digest > loghdr_meta->loghdr->next_loghdr_blkno) {
-			mlfs_debug("loghdr_to_digest %lu, next header %lu\n",
-					*loghdr_to_digest, loghdr_meta->loghdr->next_loghdr_blkno);
-			*rotated = 1;
-		}
-
-		*loghdr_to_digest = loghdr_meta->loghdr->next_loghdr_blkno;
-
-		previous_loghdr_blk = loghdr_meta->hdr_blkno;
-
-		mlfs_free(loghdr_meta);
-	}
-    //print_replay_list(&replay_list);
-
-	copy_log_from_replay_list(from_dev, &replay_list);
-}
-
 void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list)
 {
 	struct list_head *l, *tmp;
@@ -1736,7 +1686,58 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 			}
 			default:
 				panic("unsupported node type!\n");
+		}
 	}
+}
+
+void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *rotated)
+{
+	loghdr_meta_t *loghdr_meta;
+	int i, n_digest;
+	uint64_t tsc_begin;
+	static addr_t previous_loghdr_blk;
+	struct replay_list replay_list = {
+		.i_digest_hash = NULL,
+		.d_digest_hash = NULL,
+		.f_digest_hash = NULL,
+		.u_digest_hash = NULL,
+	};
+
+	INIT_LIST_HEAD(&replay_list.head);
+	
+	memset(inode_version_table, 0, sizeof(uint16_t) * NINODES);
+
+	// coalesce log entries
+	for (i = 0; i < n_hdrs; ++i) {
+		loghdr_meta = read_log_header_meta(from_dev, *loghdr_to_digest);
+
+		// if this log header was not committed, then skip over it
+		if (loghdr_meta->loghdr->inuse != LH_COMMIT_MAGIC) {
+			mlfs_assert(loghdr_meta->loghdr->inuse == 0);
+			mlfs_free(loghdr_meta);
+			break;
+		}
+
+		coalesce_replay_and_optimize(from_dev, loghdr_meta, &replay_list);
+
+		// rotated when next_loghdr_blkno jumps to beginning of the log.
+		// FIXME: instead of this condition, it would be better if 
+		// *loghdr_to_digest > the lost block of application log.
+		if (*loghdr_to_digest > loghdr_meta->loghdr->next_loghdr_blkno) {
+			mlfs_debug("loghdr_to_digest %lu, next header %lu\n",
+					*loghdr_to_digest, loghdr_meta->loghdr->next_loghdr_blkno);
+			*rotated = 1;
+		}
+
+		*loghdr_to_digest = loghdr_meta->loghdr->next_loghdr_blkno;
+
+		previous_loghdr_blk = loghdr_meta->hdr_blkno;
+
+		mlfs_free(loghdr_meta);
+	}
+    //print_replay_list(&replay_list);
+
+	copy_log_from_replay_list(from_dev, &replay_list);
 }
 
 uint32_t make_digest_request_sync(int percent)
