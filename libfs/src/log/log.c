@@ -81,10 +81,10 @@ void init_log(int dev)
 	g_log_sb = (struct log_superblock *)mlfs_zalloc(sizeof(struct log_superblock));
 	inode_version_table = (uint16_t *)mlfs_zalloc(sizeof(uint16_t) * NINODES);
 
-	g_fs_log->log_sb_blk = disk_sb[dev].log_start;
+	g_fs_log->log_sb_blk = g_fs_log_secure->log_sb_blk = disk_sb[dev].log_start;
 	g_fs_log->size = disk_sb[dev].nlog;
-	g_fs_log->dev = dev;
-	g_fs_log->nloghdr = 0;
+	g_fs_log->dev = g_fs_log_secure->dev = dev;
+	g_fs_log->nloghdr = g_fs_log_secure->nloghdr = 0;
 
     printf("original size of the log: %lx | original superblock number %lx\n", g_fs_log->size, g_fs_log->log_sb_blk);
 
@@ -96,7 +96,7 @@ void init_log(int dev)
 
     // Need to split the log into secure and unsecure sections
     // reserve 30% of the log for the coalesced digest
-    g_log_sb->secure_start_digest = disk_sb[dev].log_start + (g_fs_log->size - ((30 * g_fs_log->size) / 100)) + 1;
+    g_log_sb->secure_start_digest = (g_fs_log->size - ((30 * g_fs_log->size) / 100)) + 1;
     g_log_sb->loghdr_expect_to_digest_secure = 0;
 
     // Size of the secure log is 30% of the the regular log
@@ -104,8 +104,6 @@ void init_log(int dev)
     g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
     g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
     g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
-	g_fs_log_secure->dev = dev;
-	g_fs_log_secure->nloghdr = 0;
 
     // Set the secure log size to 70% of the true size
     g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
