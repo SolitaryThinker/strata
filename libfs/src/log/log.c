@@ -308,6 +308,7 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 	// next_avail reaches the end of log. 
 	//if (log_metadata->next_avail + nr_blocks > log_metadata->log_sb_blk + log_metadata->size) {
 	if (log_metadata->next_avail + nr_blocks > log_metadata->size) {
+		printf("next avail %d | nr_blocks %d | size %d\n", log_metadata->next_avail, nr_blocks, log_metadata->size);
 		mlfs_assert(!use_secure_log);
 		log_metadata->next_avail = log_metadata->log_sb_blk + 1;
 
