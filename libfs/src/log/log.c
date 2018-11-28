@@ -1629,6 +1629,114 @@ void coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *
 		mlfs_free(loghdr_meta);
 	}
     //print_replay_list(&replay_list);
+
+	copy_log_from_replay_list(from_dev, &replay_list);
+}
+
+void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list)
+{
+	struct list_head *l, *tmp;
+	struct logheader_meta *loghdr_meta;
+	struct inode *ip;
+	uint8_t *node_type, *data;
+	f_iovec_t *f_iovec, *iovec_tmp;
+	uint64_t tsc_begin;
+
+	list_for_each_safe(l, tmp, &replay_list->head) {
+				node_type = (uint8_t *)l + sizeof(struct list_head);
+		mlfs_assert(*node_type < 5);
+
+		switch(*node_type) {
+			case NTYPE_I: {
+				i_replay_t *i_item;
+				i_item = (i_replay_t *)container_of(l, i_replay_t, list);
+
+				start_log_tx();
+
+				commit_log_tx();
+
+
+				HASH_DEL(replay_list->i_digest_hash, i_item);
+				list_del(l);
+				mlfs_free(i_item);
+				break;
+			}
+			case NTYPE_D: {
+				d_replay_t *d_item;
+				d_item = (d_replay_t *)container_of(l, d_replay_t, list);
+
+
+				start_log_tx();
+				commit_log_tx();
+
+				HASH_DEL(replay_list->d_digest_hash, d_item);
+				list_del(l);
+				mlfs_free(d_item);
+				break;
+			}
+			case NTYPE_F: {
+				uint8_t dest_dev = g_root_dev;
+				f_replay_t *f_item, *t;
+				f_item = (f_replay_t *)container_of(l, f_replay_t, list);
+				lru_key_t k;
+
+
+// #ifdef FCONCURRENT
+// 				HASH_ITER(hh, replay_list->f_digest_hash, f_item, t) {
+// 					struct f_digest_worker_arg *arg;
+
+// 					// Digest worker thread will free the arg.
+// 					arg = (struct f_digest_worker_arg *)mlfs_alloc(
+// 							sizeof(struct f_digest_worker_arg));
+
+// 					arg->from_dev = from_dev;
+// 					arg->to_dev = g_root_dev;
+// 					arg->f_item = f_item;
+
+// 					thpool_add_work(file_digest_thread_pool,
+// 							file_digest_worker, (void *)arg);
+// 				}
+
+// 				//if (thpool_num_threads_working(file_digest_thread_pool))
+// 				thpool_wait(file_digest_thread_pool);
+
+// 				HASH_ITER(hh, replay_list->f_digest_hash, f_item, t) {
+// 					HASH_DEL(replay_list->f_digest_hash, f_item);
+// 					mlfs_free(f_item);
+// 				}
+// #else
+				list_for_each_entry_safe(f_iovec, iovec_tmp,
+						&f_item->iovec_list, list) {
+
+					start_log_tx();
+					loghdr_meta = get_loghdr_meta();
+					mlfs_assert(loghdr_meta);
+					ip = icache_find(g_root_dev, f_item->key.inum);
+					data = g_bdev[from_dev]->map_base_addr + (f_iovec->blknr << g_block_size_shift);
+					loghdr_meta->secure_log = 1;
+					add_to_log(ip, data, f_iovec->offset, f_iovec->length);
+					commit_log_tx();
+					mlfs_free(f_iovec);
+				}
+
+				HASH_DEL(replay_list->f_digest_hash, f_item);
+				mlfs_free(f_item);
+				list_del(l);
+				break;
+			}
+			case NTYPE_U: {
+				u_replay_t *u_item;
+				u_item = (u_replay_t *)container_of(l, u_replay_t, list);
+
+
+				HASH_DEL(replay_list->u_digest_hash, u_item);
+				list_del(l);
+				mlfs_free(u_item);
+				break;
+			}
+			default:
+				panic("unsupported node type!\n");
+	}
 }
 
 uint32_t make_digest_request_sync(int percent)
@@ -1650,9 +1758,10 @@ uint32_t make_digest_request_sync(int percent)
 	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
 			g_fs_log->dev, g_fs_log->n_digest_req, g_log_sb->start_digest, 0UL);
 	
-	rotated = 0;
 #ifdef COALESCE
+	rotated = 0;
 	coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &g_log_sb->start_digest, &rotated);
+	printf("++++++++++++++LOG HAS ROTATED+++++++++++++++\n");
 #endif
 	mlfs_info("%s\n", cmd);
 

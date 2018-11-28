@@ -142,6 +142,9 @@ typedef struct logheader_meta {
 	// io vector for user buffer. used for log write.
 	io_vec_t io_vec[10];
 
+	// flag used to determine which log to allocate from
+	uint8_t secure_log;
+
 	uint32_t ext_used;
 	// 2048 bytes that can be piggybacked to logheader.
 	// used for dirent name and very small write.
