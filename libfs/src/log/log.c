@@ -1072,10 +1072,28 @@ void wait_on_digesting()
 	//}
 }
 
+void wait_on_coalescing()
+{
+	uint64_t tsc_begin, tsc_end;
+	if (enable_perf_stats) 
+		tsc_begin = asm_rdtsc();
+
+	while(g_fs_log_secure->digesting)
+		cpu_relax();
+
+	//if (enable_perf_stats) {
+		//tsc_end = asm_rdtsc();
+		//g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
+		//g_perf_stats.digest_wait_nr++;
+	//}
+}
+
 int make_digest_request_async(int percent)
 {
 	char cmd_buf[MAX_CMD_BUF] = {0};
 	int ret = 0;
+
+	wait_on_coalescing();
 
 	sprintf(cmd_buf, "|digest |%d|", percent);
 
