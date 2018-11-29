@@ -1813,6 +1813,7 @@ uint32_t make_digest_request_sync(int percent)
 	g_fs_log->n_digest_req = (percent * n_digest) / 100;
 
 #ifdef COALESCE
+	set_digesting(g_fs_log_secure);
 	log_rotated_during_coalescing = 0;
 	coalesce_count = 0;
 	digest_blkno = g_log_sb->start_digest;
@@ -1919,7 +1920,8 @@ void handle_digest_response(char *ack_cmd)
 	write_log_superblock(g_log_sb);
 
 	//xchg_8(&g_fs_log->digesting, 0);
-	clear_digesting();
+	clear_digesting(g_fs_log);
+	clear_digesting(g_fs_log_secure);
 
 	if (enable_perf_stats) 
 		show_libfs_stats();
