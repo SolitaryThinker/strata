@@ -1653,9 +1653,18 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 
                 mlfs_info("%s", "INODE\n");
 				start_log_tx();
-
+				loghdr_meta = get_loghdr_meta();
+				mlfs_assert(loghdr_meta);
+				uint8_t type = i_item->create ? L_TYPE_INODE_CREATE : L_TYPE_INODE_UPDATE;
+				ip = icache_find(g_root_dev, i_item->key.inum);
+				if (ip == NULL) {
+					printf("create flag %d\n", i_item->create);
+					panic("Cannot find Inode :(\n");
+				}
+				loghdr_meta->secure_log = 1;
+				mlfs_assert(loghdr_meta->secure_log);
+				add_to_loghdr(type, ip, 0, sizeof(struct dinode), NULL, 0);
 				commit_log_tx();
-
 
 				HASH_DEL(replay_list->i_digest_hash, i_item);
 				list_del(l);
