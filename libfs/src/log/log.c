@@ -1677,6 +1677,33 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
                mlfs_info("%s", "DIRECTORY\n");
 
 				start_log_tx();
+				loghdr_meta = get_loghdr_meta();
+				mlfs_assert(loghdr_meta);
+				uint8_t type = d_item->key.type;
+				ip = icache_find(g_root_dev, d_item->dir_inum);
+				mlfs_assert(ip);
+
+				char *loghdr_ptr = g_bdev[from_dev]->map_base_addr + (d_item->blknr << g_block_size_shift);
+				char *name = loghdr_ptr + sizeof(struct logheader);
+				char loghdr_ext[2048];
+				memmove(loghdr_ext, name, _min(strlen(name), 2048));
+				name = strtok(loghdr_ext, "|");
+				while (name != NULL) {
+					if (name[0] == '0' + n) {
+						name++;
+						found = 1;
+						break;
+					}
+					name = strtok(NULL, "|");
+				}
+				mlfs_assert(found)
+				name = strtok(name, "@");
+				long dirent_inum = strtoul(strtok(NULL, "@"), NULL, 10);
+				mlfs_assert(dirent_inum == (uint32_t) d_item->key.inum);
+
+				loghdr_meta->secure_log = 1;
+				mlfs_assert(loghdr_meta->secure_log);
+				add_to_loghdr(type, ip, d_item->key.inum, ip->size, name, strlen(name));
 				commit_log_tx();
 
 				HASH_DEL(replay_list->d_digest_hash, d_item);
