@@ -96,15 +96,18 @@ void init_log(int dev)
 
 	read_log_superblock(g_log_sb);
 
+	// Must be larger than 30 percent
+	int secure_log_percentage = 30;
+
     // Need to split the log into secure and unsecure sections
     // reserve 30% of the log for the coalesced digest
     g_fs_log_secure->size = g_fs_log->size;
-    g_fs_log_secure->next_avail_header = (g_fs_log->size - ((30 * g_fs_log->size) / 100));
+    g_fs_log_secure->next_avail_header = (g_fs_log->size - ((secure_log_percentage * g_fs_log->size) / 100));
     g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
     g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
 
     // Set the secure log size to 70% of the true size
-    g_fs_log->size = g_fs_log->size - ((30 * g_fs_log->size) / 100) - 1;
+    g_fs_log->size = g_fs_log->size - ((secure_log_percentage * g_fs_log->size) / 100) - 1;
 	g_fs_log->log_sb = g_log_sb;
 
 	// Assuming all logs are digested by recovery.
@@ -309,7 +312,9 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 	//if (log_metadata->next_avail + nr_blocks > log_metadata->log_sb_blk + log_metadata->size) {
 	if (log_metadata->next_avail + nr_blocks > log_metadata->size) {
 		printf("next avail %x | nr_blocks %x | size %x\n", log_metadata->next_avail, nr_blocks, log_metadata->size);
-		mlfs_assert(!use_secure_log);
+		if (use_secure_log) {
+			panic("Ran out of space in secure log\n");
+		}
 		log_metadata->next_avail = log_metadata->log_sb_blk + 1;
 
 		atomic_add(&log_metadata->avail_version, 1);
@@ -1093,8 +1098,6 @@ int make_digest_request_async(int percent)
 	char cmd_buf[MAX_CMD_BUF] = {0};
 	int ret = 0;
 
-	wait_on_coalescing();
-
 	sprintf(cmd_buf, "|digest |%d|", percent);
 
 	if (!g_fs_log->digesting && atomic_load(&g_log_sb->n_digest) > 0) {
@@ -1813,7 +1816,6 @@ uint32_t make_digest_request_sync(int percent)
 	g_fs_log->n_digest_req = (percent * n_digest) / 100;
 
 #ifdef COALESCE
-	set_digesting(g_fs_log_secure);
 	log_rotated_during_coalescing = 0;
 	coalesce_count = 0;
 	digest_blkno = g_log_sb->start_digest;
@@ -1920,8 +1922,7 @@ void handle_digest_response(char *ack_cmd)
 	write_log_superblock(g_log_sb);
 
 	//xchg_8(&g_fs_log->digesting, 0);
-	clear_digesting(g_fs_log);
-	clear_digesting(g_fs_log_secure);
+	clear_digesting();
 
 	if (enable_perf_stats) 
 		show_libfs_stats();

@@ -77,26 +77,26 @@ void start_log_tx(void);
 void abort_log_tx(void);
 void commit_log_tx(void);
 
-static inline void set_digesting(struct fs_log *log_metadata)
+static inline void set_digesting()
 {
 	while (1) {
 		//if (!xchg_8(&g_fs_log->digesting, 1)) 
-		if (!cmpxchg(&log_metadata->digesting, 0, 1)) 
+		if (!cmpxchg(&g_fs_log->digesting, 0, 1)) 
 			return;
 
-		while (log_metadata->digesting) 
+		while (g_fs_log->digesting) 
 			cpu_relax();
 	}
 }
 
-static inline void clear_digesting(strcut fs_log *log_metadata)
+static inline void clear_digesting()
 {
 	while (1) {
 		//if (!xchg_8(&g_fs_log->digesting, 1)) 
-		if (cmpxchg(&log_metadata->digesting, 1, 0)) 
+		if (cmpxchg(&g_fs_log->digesting, 1, 0)) 
 			return;
 
-		while (log_metadata->digesting) 
+		while (g_fs_log->digesting) 
 			cpu_relax();
 	}
 }
