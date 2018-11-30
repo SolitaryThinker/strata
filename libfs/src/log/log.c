@@ -103,8 +103,8 @@ void init_log(int dev)
     // reserve 30% of the log for the coalesced digest
     g_fs_log_secure->size = g_fs_log->size;
     g_fs_log_secure->next_avail_header = (g_fs_log->size - ((secure_log_percentage * g_fs_log->size) / 100));
-    g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
-    g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
+    g_fs_log_secure->next_avail = g_fs_log_secure->next_avail_header + 1;
+    g_fs_log_secure->start_blk = g_fs_log_secure->next_avail_header;
 
     // Set the secure log size to 70% of the true size
     g_fs_log->size = g_fs_log->size - ((secure_log_percentage * g_fs_log->size) / 100) - 1;
@@ -978,7 +978,6 @@ static void commit_log(void)
 		} else {
 			atomic_fetch_add(&g_log_sb->n_secure_digest, 1);
 		}
-
 		mlfs_assert(loghdr_meta->loghdr->next_loghdr_blkno
 				>= g_fs_log->log_sb_blk);
 	}
@@ -1651,7 +1650,7 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 				i_replay_t *i_item;
 				i_item = (i_replay_t *)container_of(l, i_replay_t, list);
 
-                mlfs_info("%s", "INODE\n");
+                mlfs_info("%d %s", i_item->create, "INODE\n");
 				start_log_tx();
 				loghdr_meta = get_loghdr_meta();
 				mlfs_assert(loghdr_meta);
