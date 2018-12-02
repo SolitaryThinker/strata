@@ -945,7 +945,6 @@ static void digest_replay_and_optimize(uint8_t from_dev,
 
 	nr_entries = loghdr_meta->loghdr->n;
 	loghdr = loghdr_meta->loghdr;
-    //printf("======================================Number of log entries to coalesce: %d\n", nr_entries);
 
 	for (i = 0; i < nr_entries; i++) {
 		switch(loghdr->type[i]) {
@@ -1050,7 +1049,6 @@ static void digest_replay_and_optimize(uint8_t from_dev,
 
 #ifndef EXPERIMENTAL
 #ifdef IOMERGE
-                printf("IOMERGE\n");
 				// IO data is merged if the same offset found.
 				// Reduce amount IO when IO data has locality such as Zipf dist.
 				// FIXME: currently iomerge works correctly when IO size is 
@@ -1084,20 +1082,16 @@ static void digest_replay_and_optimize(uint8_t from_dev,
 					HASH_ADD(hh, item->iovec_hash, hash_key,
 							sizeof(offset_t), f_iovec);
 				}
-                printf("length: %d | offset: %d | blknr: %d\n", f_iovec->length, f_iovec->offset, f_iovec->blknr);
 #else
-                //printf("else IOMERGE\n");
 				f_iovec = (f_iovec_t *)mlfs_zalloc(sizeof(f_iovec_t));
 				f_iovec->length = loghdr->length[i];
 				f_iovec->offset = loghdr->data[i];
 				f_iovec->blknr = loghdr->blocks[i];
-                printf("length: %d | offset: %d | blknr: %d\n", f_iovec->length, f_iovec->offset, f_iovec->blknr);
 				INIT_LIST_HEAD(&f_iovec->list);
 				list_add_tail(&f_iovec->list, &item->iovec_list);
 #endif	//IOMERGE
 
 #else //EXPERIMENTAL
-                printf("I am getting run else experimental\n");
 				// Experimental feature: merge contiguous small writes to
 				// a single write one.
 				mlfs_debug("new log block %lu\n", loghdr->blocks[i]);
@@ -1379,13 +1373,6 @@ static void digest_log_from_replay_list(uint8_t from_dev, struct replay_list *re
 				f_replay_t *f_item, *t;
 				f_item = (f_replay_t *)container_of(l, f_replay_t, list);
 				lru_key_t k;
-#if 0
-                printf("\tstruct file_replay\n");
-				printf("\t\tuint8_t node_type: %d\n", f_item->node_type);
-				printf("\t\tuint32_t inum: %d\n", f_item->key.inum);
-				printf("\t\tuint16_t ver: %d", f_item->key.ver);
-				printf("\t\tstruct list_head iovec_list:\n");
-#endif
 				if (enable_perf_stats) 
 					tsc_begin = asm_rdtscp();
 
@@ -1415,14 +1402,6 @@ static void digest_log_from_replay_list(uint8_t from_dev, struct replay_list *re
 #else
 				list_for_each_entry_safe(f_iovec, iovec_tmp, 
 						&f_item->iovec_list, list) {
-#if 0
-                    printf("\t\t\tstruct file_io_vector\n");
-					printf("\t\t\t\toffset_t offset: %d\n", f_iovec->offset);
-					printf("\t\t\t\tuint32_t length: %d\n", f_iovec->length);
-					printf("\t\t\t\taddr_t blknr: %d\n", f_iovec->blknr);
-					printf("\t\t\t\tuint32_t n_list: %d\n", f_iovec->n_list);
-					printf("\t\t\t\tstruct list_head iov_blk_list ???\n");
-#endif
 
 #ifndef EXPERIMENTAL
 					digest_file(from_dev, dest_dev, 
@@ -1568,7 +1547,6 @@ static int digest_logs(uint8_t from_dev, int n_hdrs,
 
 	memset(inode_version_table, 0, sizeof(uint16_t) * NINODES);
 
-    printf("+++++++++++++++++num hdrs: %d\n", n_hdrs);
 
 	// digest log entries
 	for (i = 0 ; i < n_hdrs; i++) {
