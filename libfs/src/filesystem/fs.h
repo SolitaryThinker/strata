@@ -113,6 +113,8 @@ typedef struct mlfs_libfs_stats {
 	uint64_t tmp_tsc;
 	uint64_t bcache_search_tsc;
 	uint32_t bcache_search_nr;
+	uint32_t n_coalesced;
+	uint32_t n_coalesced_skipped;
 } libfs_stat_t;
 
 extern struct lru g_fcache_head;

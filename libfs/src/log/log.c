@@ -1215,8 +1215,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 				}
 				// move blknr to point the up-to-date inode snapshot in the log.
 				item->blknr = loghdr->blocks[i];
-				/*if (enable_perf_stats)*/
-					/*g_perf_stats.n_digest++;*/
+				if (enable_perf_stats)
+					g_perf_stats.n_coalesced++;
 				break;
 			}
 			case L_TYPE_DIR_DEL: 
@@ -1249,8 +1249,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 				item->dir_inum = loghdr->inode_no[i];
 				item->dir_size = loghdr->length[i];
 				item->blknr = loghdr_meta->hdr_blkno;
-				//if (enable_perf_stats)
-					//g_perf_stats.n_digest++;
+				if (enable_perf_stats)
+					g_perf_stats.n_coalesced++;
 				break;
 			}
 			case L_TYPE_FILE: {
@@ -1371,8 +1371,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 				}
 #endif
 
-				//if (enable_perf_stats)
-					//g_perf_stats.n_digest++;
+				if (enable_perf_stats)
+					g_perf_stats.n_coalesced++;
 				break;
 			}
 			case L_TYPE_UNLINK: {
@@ -1412,8 +1412,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->i_digest_hash, i_item);
 					list_del(&i_item->list);
 					mlfs_free(i_item);
-					//if (enable_perf_stats)
-						//g_perf_stats.n_digest_skipped++;
+					if (enable_perf_stats)
+						g_perf_stats.n_coalesced_skipped++;
 				} else {
 					// the unlink must be applied. create a new unlink item.
 					u_item = (u_replay_t *)mlfs_zalloc(sizeof(u_replay_t));
@@ -1424,8 +1424,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 					list_add_tail(&u_item->list, &replay_list->head);
 					mlfs_debug("[ULINK] inum %u (ver %u)\n", 
 							u_item->key.inum, u_item->key.ver);
-					//if (enable_perf_stats)
-						//g_perf_stats.n_digest++;
+					if (enable_perf_stats)
+						g_perf_stats.n_coalesced++;
 				}
 
 #if 0
@@ -1455,8 +1455,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->d_digest_hash, d_item);
 					list_del(&d_item->list);
 					mlfs_free(d_item);
-					//if (enable_perf_stats)
-						//g_perf_stats.n_digest_skipped++;
+					if (enable_perf_stats)
+						g_perf_stats.n_coalesced_skipped++;
 				}
 
 				d_search.key.inum = inum;
@@ -1472,8 +1472,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 					HASH_DEL(replay_list->d_digest_hash, d_item);
 					list_del(&d_item->list);
 					mlfs_free(d_item);
-					//if (enable_perf_stats)
-						//g_perf_stats.n_digest_skipped++;
+					if (enable_perf_stats)
+						g_perf_stats.n_coalesced_skipped++;
 				}
 
 				// unlink digest must happens before directory delete digest.
@@ -1492,8 +1492,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 					list_del(&d_item->list);
 					mlfs_free(d_item);
 					
-					//if (enable_perf_stats)
-						//g_perf_stats.n_digest_skipped++;
+					if (enable_perf_stats)
+						g_perf_stats.n_coalesced_skipped++;
 				}
 
 				// delete file digest info.
@@ -1509,8 +1509,8 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 						list_del(&f_iovec->list);
 						mlfs_free(f_iovec);
 						
-						//if (enable_perf_stats)
-							//g_perf_stats.n_digest_skipped++;
+						if (enable_perf_stats)
+							g_perf_stats.n_coalesced_skipped++;
 					}
 
 					HASH_DEL(replay_list->f_digest_hash, f_item);
