@@ -392,10 +392,10 @@ static void persist_log_header(struct logheader_meta *loghdr_meta,
 
 	io_bh = bh_get_sync_IO(g_fs_log->dev, hdr_blkno, BH_NO_DATA_ALLOC);
 
-	//if (enable_perf_stats) {
-		//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-		//g_perf_stats.bcache_search_nr++;
-	//}
+	if (enable_perf_stats) {
+		g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+		g_perf_stats.bcache_search_nr++;
+	}
 	//pthread_spin_lock(&io_bh->b_spinlock);
 
 	mlfs_get_time(&loghdr->mtime);
@@ -503,10 +503,10 @@ void commit_log_tx(void)
 		pthread_mutex_unlock(g_log_mutex_shared);
 		mlfs_debug("commit log_tx %u\n", g_fs_log->outstanding);
 #endif
-		//if (enable_perf_stats) {
-			//g_perf_stats.log_commit_tsc += (asm_rdtscp() - tsc_begin);
-			//g_perf_stats.log_commit_nr++;
-		//}
+		if (enable_perf_stats) {
+			g_perf_stats.log_commit_tsc += (asm_rdtscp() - tsc_begin);
+			g_perf_stats.log_commit_nr++;
+		}
 	} else {
 		panic("it has a race condition\n");
 	}
@@ -531,10 +531,10 @@ static int persist_log_inode(struct logheader_meta *loghdr_meta, uint32_t idx)
 
 	log_bh = bh_get_sync_IO(g_fs_log->dev, logblk_no, BH_NO_DATA_ALLOC);
 
-	//if (enable_perf_stats) {
-		//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-		//g_perf_stats.bcache_search_nr++;
-	//}
+	if (enable_perf_stats) {
+		g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+		g_perf_stats.bcache_search_nr++;
+	}
 
 	loghdr->blocks[idx] = logblk_no;
 
@@ -659,10 +659,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		fc_block = fcache_find(inode, key);
 
-		//if (enable_perf_stats) {
-			//g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
-			//g_perf_stats.l0_search_nr++;
-		//}
+		if (enable_perf_stats) {
+			g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
+			g_perf_stats.l0_search_nr++;
+		}
 
 		logblk_no = loghdr_meta->log_blocks + loghdr_meta->pos;
 		loghdr_meta->pos++;
@@ -696,10 +696,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		log_bh = bh_get_sync_IO(g_fs_log->dev, logblk_no, BH_NO_DATA_ALLOC);
 
-		//if (enable_perf_stats) {
-			//g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
-			//g_perf_stats.bcache_search_nr++;
-		//}
+		if (enable_perf_stats) {
+			g_perf_stats.bcache_search_tsc += (asm_rdtscp() - start_tsc);
+			g_perf_stats.bcache_search_nr++;
+		}
 
 		// the logblk_no could be either a new block or existing one (patching case).
 		loghdr->blocks[idx] = logblk_no;
@@ -767,10 +767,10 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 			fc_block = fcache_find(inode, key);
 
-			//if (enable_perf_stats) {
-				//g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
-				//g_perf_stats.l0_search_nr++;
-			//}
+			if (enable_perf_stats) {
+				g_perf_stats.l0_search_tsc += (asm_rdtscp() - start_tsc);
+				g_perf_stats.l0_search_nr++;
+			}
 
 			if (!fc_block) {
 				fc_block = fcache_alloc_add(inode, key, logblk_no + k);
@@ -788,9 +788,9 @@ static int persist_log_file(struct logheader_meta *loghdr_meta,
 
 		bh_release(log_bh);
 
-		//if (enable_perf_stats) {
-			//g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
-		//}
+		if (enable_perf_stats) {
+			g_perf_stats.tmp_tsc += (asm_rdtscp() - start_tsc_tmp);
+		}
 	}
 
 	return 0;
@@ -952,10 +952,10 @@ static void commit_log(void)
 		 * is followed by log header write */
 		persist_log_blocks(loghdr_meta);
 
-		//if (enable_perf_stats) {
-			//tsc_end = asm_rdtscp();
-			//g_perf_stats.log_write_tsc += (tsc_end - tsc_begin);
-		//}
+		if (enable_perf_stats) {
+			tsc_end = asm_rdtscp();
+			g_perf_stats.log_write_tsc += (tsc_end - tsc_begin);
+		}
 
 #if 0
 		if(loghdr->next_loghdr_blkno != g_fs_log->next_avail_header) {
@@ -971,10 +971,10 @@ static void commit_log(void)
 		// Write log header to log area (real commit)
 		persist_log_header(loghdr_meta, loghdr_meta->hdr_blkno);
 
-		//if (enable_perf_stats) {
-			//tsc_end = asm_rdtscp();
-			//g_perf_stats.loghdr_write_tsc += (tsc_end - tsc_begin);
-		//}
+		if (enable_perf_stats) {
+			tsc_end = asm_rdtscp();
+			g_perf_stats.loghdr_write_tsc += (tsc_end - tsc_begin);
+		}
 
 		if (!loghdr_meta->secure_log) {
 			atomic_fetch_add(&g_log_sb->n_digest, 1);
@@ -1072,27 +1072,11 @@ void wait_on_digesting()
 	while(g_fs_log->digesting)
 		cpu_relax();
 
-	//if (enable_perf_stats) {
-		//tsc_end = asm_rdtsc();
-		//g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
-		//g_perf_stats.digest_wait_nr++;
-	//}
-}
-
-void wait_on_coalescing()
-{
-	uint64_t tsc_begin, tsc_end;
-	if (enable_perf_stats) 
-		tsc_begin = asm_rdtsc();
-
-	while(g_fs_log_secure->digesting)
-		cpu_relax();
-
-	//if (enable_perf_stats) {
-		//tsc_end = asm_rdtsc();
-		//g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
-		//g_perf_stats.digest_wait_nr++;
-	//}
+	if (enable_perf_stats) {
+		tsc_end = asm_rdtsc();
+		g_perf_stats.digest_wait_tsc += (tsc_end - tsc_begin);
+		g_perf_stats.digest_wait_nr++;
+	}
 }
 
 int make_digest_request_async(int percent)
