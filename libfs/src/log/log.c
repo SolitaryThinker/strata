@@ -1112,6 +1112,7 @@ void digest_secure_log_during_coalescing()
 {
 	int ret, i;
 	char cmd[MAX_SOCK_BUF];
+	char buf[MAX_SOCK_BUF];
 
 	g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
 
@@ -1875,13 +1876,17 @@ void handle_digest_response(char *ack_cmd)
 		show_libfs_stats();
 }
 
+int kernfs_epfd;
+struct epoll_event kernfs_epev;
+struct sockaddr_un srv_addr;
+
 #define EVENT_COUNT 2
 void *digest_thread(void *arg)
 {
-	int epfd, kernfs_epfd, ret, n, flags;
+	int epfd, ret, n, flags;
 	char buf[MAX_SOCK_BUF] = {0}, cmd_buf[MAX_CMD_BUF] = {0};
-	struct epoll_event kernfs_epev = {0}, epev[EVENT_COUNT] = {0};
-	struct sockaddr_un srv_addr;
+	struct epoll_event epev[EVENT_COUNT] = {0};
+
 
 	// setup server address
 	memset(&g_srv_addr, 0, sizeof(g_addr));
