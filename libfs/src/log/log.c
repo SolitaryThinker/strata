@@ -1108,6 +1108,79 @@ int make_digest_request_async(int percent)
 		return -EBUSY;
 }
 
+void digest_secure_log_during_coalescing()
+{
+	int ret, i;
+	char cmd[MAX_SOCK_BUF];
+
+	g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
+
+	socklen_t len = sizeof(struct sockaddr_un);
+	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
+			g_fs_log_secure->dev, g_fs_log_secure->n_digest_req, g_log_sb->secure_start_digest, 0UL);
+	mlfs_info("%s\n", cmd);
+
+	// send digest command
+	ret = sendto(g_sock_fd, cmd, MAX_SOCK_BUF, 0,
+			(struct sockaddr *)&g_srv_addr, len);
+	
+	ret = epoll_wait(kernfs_epfd, &kernfs_epev, 1, -1); 
+	if (ret >= 0) {
+		ret = recvfrom(g_sock_fd, buf, MAX_SOCK_BUF, 0, 
+				(struct sockaddr *)&srv_addr, &len);
+
+		mlfs_info("received %s\n", buf);
+		
+		handle_digest_request_during_coalescing(buf);
+		
+	}
+}
+
+void handle_digest_request_during_coalescing(char *ack_cmd)
+{
+	char ack[10] = {0};
+	addr_t next_hdr_of_digested_hdr;
+	int n_digested, rotated, lru_updated;
+	struct inode *inode, *tmp;
+
+	sscanf(ack_cmd, "|%s |%d|%lu|%d|%d|", ack, &n_digested, 
+			&next_hdr_of_digested_hdr, &rotated, &lru_updated);
+
+
+	if (g_fs_log_secure->n_digest_req == n_digested)  {
+		mlfs_info("%s", "digest is done correctly\n");
+		mlfs_info("%s", "-----------------------------------\n");
+	} else {
+		mlfs_printf("[D] digest is done insufficiently: req %u | done %u\n",
+				g_fs_log->n_digest_req, n_digested);
+		panic("Digest was incorrect during coalescing!\n");
+	}
+
+	mlfs_assert(!rotated);
+
+	// reset the secure log
+	g_fs_log_secure->size = disk_sb[g_fs_log_secure->dev].nlog;
+	g_fs_log_secure->next_avail_header = g_log_sb->secure_start_digest;
+	g_fs_log_secure->next_avail = g_log_sb->secure_start_digest + 1;
+	g_fs_log_secure->start_blk = g_log_sb->secure_start_digest;
+	g_log_sb->secure_start_digest =  g_fs_log_secure->next_avail_header;
+	atomic_init(&g_log_sb->n_secure_digest, 0);
+
+	HASH_ITER(hash_handle, inode_hash[g_root_dev], inode, tmp) {
+		if (!(inode->flags & I_DELETING)) {
+			if (inode->itype == T_FILE) 
+				sync_inode_ext_tree(g_root_dev, inode);
+			else if(inode->itype == T_DIR)
+				;
+			else
+				panic("unsupported inode type\n");
+		}
+	}
+
+	// persist log superblock.
+	write_log_superblock(g_log_sb);
+}
+
 void coalesce_replay_and_optimize(uint8_t from_dev, 
 		loghdr_meta_t *loghdr_meta, struct replay_list *replay_list)
 {	
@@ -1469,169 +1542,6 @@ void coalesce_replay_and_optimize(uint8_t from_dev,
 	}
 }
 
-void print_replay_list(struct replay_list *replay_list)
-{
-	struct list_head *l, *tmp;
-	uint8_t *node_type;
-	f_iovec_t *f_iovec, *iovec_tmp;
-	uint64_t tsc_begin;
-
-	list_for_each_safe(l, tmp, &replay_list->head) {
-		node_type = (uint8_t *)l + sizeof(struct list_head);
-		mlfs_assert(*node_type < 5);
-
-		switch (*node_type) {
-			case NTYPE_I: {
-				i_replay_t *i_item;
-				i_item = (i_replay_t *)container_of(l, i_replay_t, list);
-
-				// if (enable_perf_stats) 
-				// 	tsc_begin = asm_rdtscp();
-
-				// digest_inode(from_dev, g_root_dev, i_item->key.inum, i_item->blknr);
-
-				printf("\tstruct inode_replay\n");
-				printf("\t\taddr_t blknr: %x\n", i_item->blknr);
-				printf("\t\tuint8_t node_type: %d\n", i_item->node_type);
-				printf("\t\tuint8_t create: %d\n", i_item->create);
-				printf("\t\tuint32_t inum: %d\n", i_item->key.inum);
-				printf("\t\tuint16_t ver: %d", i_item->key.ver);
-				HASH_DEL(replay_list->i_digest_hash, i_item);
-				list_del(l);
-				mlfs_free(i_item);
-
-				// if (enable_perf_stats)
-				// 	g_perf_stats.digest_inode_tsc += asm_rdtscp() - tsc_begin;
-				
-				break;
-			}
-			case NTYPE_D: {
-				d_replay_t *d_item;
-				d_item = (d_replay_t *)container_of(l, d_replay_t, list);
-
-				// if (enable_perf_stats) 
-				// 	tsc_begin = asm_rdtscp();
-
-				// digest_directory(from_dev, g_root_dev, d_item->n, 
-				// 		d_item->key.type, d_item->dir_inum, d_item->dir_size, 
-				// 		d_item->key.inum, d_item->blknr);
-
-				printf("\tstruct directory_replay\n");
-				printf("\t\tint n: %d\n", d_item->n);
-				printf("\t\tuint32_t dir_inum: %d\n", d_item->dir_inum);
-				printf("\t\tuint32_t dir_size: %d\n" ,d_item->dir_size);
-				printf("\t\taddr_t blknr: %d\n", d_item->blknr);
-				printf("\t\tuint8_t node_type: %d\n", d_item->node_type);
-				printf("\t\tuint32_t inum: %d\n", d_item->key.inum);
-				printf("\t\tuint16_t ver: %d", d_item->key.ver);
-				HASH_DEL(replay_list->d_digest_hash, d_item);
-				list_del(l);
-				mlfs_free(d_item);
-
-				// if (enable_perf_stats)
-				// 	g_perf_stats.digest_dir_tsc += asm_rdtscp() - tsc_begin;
-
-				break;
-			}
-			case NTYPE_F: {
-				uint8_t dest_dev = g_root_dev;
-				f_replay_t *f_item, *t;
-				f_item = (f_replay_t *)container_of(l, f_replay_t, list);
-				lru_key_t k;
-
-				// if (enable_perf_stats) 
-				// 	tsc_begin = asm_rdtscp();
-
-				printf("\tstruct file_replay\n");
-				printf("\t\tuint8_t node_type: %d\n", f_item->node_type);
-				printf("\t\tuint32_t inum: %d\n", f_item->key.inum);
-				printf("\t\tuint16_t ver: %d", f_item->key.ver);
-				printf("\t\tstruct list_head iovec_list:\n");
-
-
-#ifdef FCONCURRENT
-				// HASH_ITER(hh, replay_list->f_digest_hash, f_item, t) {
-				// 	struct f_digest_worker_arg *arg;
-
-				// 	// Digest worker thread will free the arg.
-				// 	arg = (struct f_digest_worker_arg *)mlfs_alloc(
-				// 			sizeof(struct f_digest_worker_arg));
-
-				// 	arg->from_dev = from_dev;
-				// 	arg->to_dev = g_root_dev;
-				// 	arg->f_item = f_item;
-
-				// 	thpool_add_work(file_digest_thread_pool,
-				// 			file_digest_worker, (void *)arg);
-				// }
-
-				// //if (thpool_num_threads_working(file_digest_thread_pool))
-				// thpool_wait(file_digest_thread_pool);
-
-				// HASH_ITER(hh, replay_list->f_digest_hash, f_item, t) {
-				// 	HASH_DEL(replay_list->f_digest_hash, f_item);
-				// 	mlfs_free(f_item);
-				// }
-#else
-				list_for_each_entry_safe(f_iovec, iovec_tmp, 
-						&f_item->iovec_list, list) {
-
-#ifndef EXPERIMENTAL
-					// digest_file(from_dev, dest_dev, 
-					// 		f_item->key.inum, f_iovec->offset, 
-					// 		f_iovec->length, f_iovec->blknr);
-					// mlfs_free(f_iovec);
-#else
-					// digest_file_iovec(from_dev, dest_dev, 
-					// 		f_item->key.inum, f_iovec);
-#endif //EXPERIMENTAL
-					// if (dest_dev == g_ssd_dev)
-					// 	mlfs_io_wait(g_ssd_dev, 0);
-					printf("\t\t\tstruct file_io_vector\n");
-					printf("\t\t\t\toffset_t offset: %d\n", f_iovec->offset);
-					printf("\t\t\t\tuint32_t length: %d\n", f_iovec->length);
-					printf("\t\t\t\taddr_t blknr: %d\n", f_iovec->blknr);
-					printf("\t\t\t\tuint32_t n_list: %d\n", f_iovec->n_list);
-					printf("\t\t\t\tstruct list_head iov_blk_list ???\n");
-				}
-
-				HASH_DEL(replay_list->f_digest_hash, f_item);
-				mlfs_free(f_item);
-#endif //FCONCURRENT
-
-				// list_del(l);
-
-				// if (enable_perf_stats)
-				// 	g_perf_stats.digest_file_tsc += asm_rdtscp() - tsc_begin;
-				break;
-			}
-			case NTYPE_U: {
-				u_replay_t *u_item;
-				u_item = (u_replay_t *)container_of(l, u_replay_t, list);
-
-				// if (enable_perf_stats) 
-				// 	tsc_begin = asm_rdtscp();
-
-				// digest_unlink(from_dev, g_root_dev, u_item->key.inum);
-
-				printf("\tstruct unlink_replay\n");
-				printf("\t\tuint8_t node_type: %d\n", u_item->node_type);
-				printf("\t\tuint32_t inum: %d\n", u_item->key.inum);
-				printf("\t\tuint16_t ver: %d", u_item->key.ver);
-				HASH_DEL(replay_list->u_digest_hash, u_item);
-				list_del(l);
-				mlfs_free(u_item);
-
-				// if (enable_perf_stats)
-				// 	g_perf_stats.digest_inode_tsc += asm_rdtscp() - tsc_begin;
-				break;
-			}
-			default:
-				panic("unsupported node type!\n");
-		}
-	}
-}
-
 void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list)
 {
 	struct list_head *l, *tmp;
@@ -1751,6 +1661,11 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 					data = g_bdev[from_dev]->map_base_addr + (f_iovec->blknr << g_block_size_shift);
 					loghdr_meta->secure_log = 1;
                     mlfs_assert(loghdr_meta->secure_log);
+					addr_t blocks_left = g_fs_log_secure->size - g_fs_log_secure->next_avail;
+					addr_t blocks_to_log = ((f_iovec->length + g_block_size_bytes - 1) / g_block_size_bytes) + 1;
+					if (blocks_left < blocks_to_log) {
+						digest_secure_log_during_coalescing();
+					}
 					add_to_log(ip, data, f_iovec->offset, f_iovec->length);
 					commit_log_tx();
 					mlfs_free(f_iovec);
@@ -1823,7 +1738,6 @@ int coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *r
 
 		mlfs_free(loghdr_meta);
 	}
-    //print_replay_list(&replay_list);
     mlfs_info("%s", "Before copy log from replay list\n");
 	copy_log_from_replay_list(from_dev, &replay_list);
     mlfs_info("%s", "After Copy Log from replay list\n");
