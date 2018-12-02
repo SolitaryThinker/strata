@@ -53,6 +53,9 @@ addr_t digest_blkno;
 // for communication with kernel fs.
 int g_sock_fd;
 static struct sockaddr_un g_srv_addr, g_addr;
+int kernfs_epfd;
+struct epoll_event kernfs_epev;
+struct sockaddr_un srv_addr;
 
 static void read_log_superblock(struct log_superblock *log_sb);
 static void write_log_superblock(struct log_superblock *log_sb);
@@ -1108,35 +1111,6 @@ int make_digest_request_async(int percent)
 		return -EBUSY;
 }
 
-void digest_secure_log_during_coalescing()
-{
-	int ret, i;
-	char cmd[MAX_SOCK_BUF];
-	char buf[MAX_SOCK_BUF];
-
-	g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
-
-	socklen_t len = sizeof(struct sockaddr_un);
-	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
-			g_fs_log_secure->dev, g_fs_log_secure->n_digest_req, g_log_sb->secure_start_digest, 0UL);
-	mlfs_info("%s\n", cmd);
-
-	// send digest command
-	ret = sendto(g_sock_fd, cmd, MAX_SOCK_BUF, 0,
-			(struct sockaddr *)&g_srv_addr, len);
-	
-	ret = epoll_wait(kernfs_epfd, &kernfs_epev, 1, -1); 
-	if (ret >= 0) {
-		ret = recvfrom(g_sock_fd, buf, MAX_SOCK_BUF, 0, 
-				(struct sockaddr *)&srv_addr, &len);
-
-		mlfs_info("received %s\n", buf);
-		
-		handle_digest_request_during_coalescing(buf);
-		
-	}
-}
-
 void handle_digest_request_during_coalescing(char *ack_cmd)
 {
 	char ack[10] = {0};
@@ -1144,7 +1118,7 @@ void handle_digest_request_during_coalescing(char *ack_cmd)
 	int n_digested, rotated, lru_updated;
 	struct inode *inode, *tmp;
 
-	sscanf(ack_cmd, "|%s |%d|%lu|%d|%d|", ack, &n_digested, 
+	sscanf(ack_cmd, "|%s |%d|%lu|%d|%d|", ack, &n_digested,
 			&next_hdr_of_digested_hdr, &rotated, &lru_updated);
 
 
@@ -1180,6 +1154,35 @@ void handle_digest_request_during_coalescing(char *ack_cmd)
 
 	// persist log superblock.
 	write_log_superblock(g_log_sb);
+}
+
+void digest_secure_log_during_coalescing()
+{
+	int ret, i;
+	char cmd[MAX_SOCK_BUF];
+    char buf[MAX_SOCK_BUF];
+
+	g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
+
+	socklen_t len = sizeof(struct sockaddr_un);
+	sprintf(cmd, "|digest |%d|%u|%lu|%lu|",
+			g_fs_log_secure->dev, g_fs_log_secure->n_digest_req, g_log_sb->secure_start_digest, 0UL);
+	mlfs_info("%s\n", cmd);
+
+	// send digest command
+	ret = sendto(g_sock_fd, cmd, MAX_SOCK_BUF, 0,
+			(struct sockaddr *)&g_srv_addr, len);
+
+	ret = epoll_wait(kernfs_epfd, &kernfs_epev, 1, -1);
+	if (ret >= 0) {
+		ret = recvfrom(g_sock_fd, buf, MAX_SOCK_BUF, 0,
+				(struct sockaddr *)&srv_addr, &len);
+
+		mlfs_info("received %s\n", buf);
+
+		handle_digest_request_during_coalescing(buf);
+
+	}
 }
 
 void coalesce_replay_and_optimize(uint8_t from_dev, 
@@ -1876,9 +1879,6 @@ void handle_digest_response(char *ack_cmd)
 		show_libfs_stats();
 }
 
-int kernfs_epfd;
-struct epoll_event kernfs_epev;
-struct sockaddr_un srv_addr;
 
 #define EVENT_COUNT 2
 void *digest_thread(void *arg)
