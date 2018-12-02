@@ -91,7 +91,6 @@ void init_log(int dev)
 	g_fs_log->dev = g_fs_log_secure->dev = dev;
 	g_fs_log->nloghdr = g_fs_log_secure->nloghdr = 0;
 
-    printf("original size of the log: %lx | original superblock number %lx\n", g_fs_log->size, g_fs_log->log_sb_blk);
 
 	ret = pipe(g_fs_log->digest_fd);
 	if (ret < 0)
@@ -149,7 +148,7 @@ void init_log(int dev)
 	digest_thread_id = mlfs_create_thread(digest_thread, &done);
 
 	// enable/disable statistics for log
-	enable_perf_stats = 0;
+	enable_perf_stats = 1;
 
 	/* wait until the digest thread get started */
 	while(!done);
@@ -304,9 +303,6 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 			mlfs_assert(!use_secure_log);
 			// digest 90% of log.
 			while(make_digest_request_async(100) != -EBUSY)
-            printf("next_avail %x | avail_version %x | start_version %x\n", log_metadata->next_avail
-                    , log_metadata->avail_version
-                    , log_metadata->start_version);
 			mlfs_info("%s", "[L] log is getting full. asynchronous digest!\n");
 		}
 	}
@@ -314,7 +310,6 @@ inline addr_t log_alloc(uint32_t nr_blocks)
 	// next_avail reaches the end of log. 
 	//if (log_metadata->next_avail + nr_blocks > log_metadata->log_sb_blk + log_metadata->size) {
 	if (log_metadata->next_avail + nr_blocks > log_metadata->size) {
-		printf("next avail %x | nr_blocks %x | size %x\n", log_metadata->next_avail, nr_blocks, log_metadata->size);
 		if (use_secure_log) {
 			panic("Ran out of space in secure log\n");
 		}
@@ -920,13 +915,11 @@ static void commit_log(void)
         if (!loghdr_meta->secure_log)
 		    pthread_mutex_lock(g_fs_log->shared_log_lock);
 
-        //printf("1 %d\n", loghdr_meta->secure_log);
 		// atomic log allocation.
 		loghdr_meta->log_blocks = log_alloc(nr_log_blocks);
 		loghdr_meta->nr_log_blocks = nr_log_blocks;
 		// loghdr_meta->pos = 0 is used for log header block.
 		loghdr_meta->pos = 1;
-        //printf("2\n");
 		loghdr_meta->hdr_blkno = loghdr_meta->secure_log ? g_fs_log_secure->next_avail_header : g_fs_log->next_avail_header;
 		if (loghdr_meta->secure_log) {
 			mlfs_assert(g_fs_log->digesting);
@@ -1548,14 +1541,12 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 				i_replay_t *i_item;
 				i_item = (i_replay_t *)container_of(l, i_replay_t, list);
 
-                mlfs_info("%d %s", i_item->create, "INODE\n");
 				start_log_tx();
 				loghdr_meta = get_loghdr_meta();
 				mlfs_assert(loghdr_meta);
 				uint8_t type = i_item->create ? L_TYPE_INODE_CREATE : L_TYPE_INODE_UPDATE;
 				ip = icache_find(g_root_dev, i_item->key.inum);
 				if (ip == NULL) {
-					printf("create flag %d\n", i_item->create);
 					panic("Cannot find Inode :(\n");
 				}
 				loghdr_meta->secure_log = 1;
@@ -1572,7 +1563,6 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 				d_replay_t *d_item;
 				d_item = (d_replay_t *)container_of(l, d_replay_t, list);
 
-               mlfs_info("%s", "DIRECTORY\n");
 
 				start_log_tx();
 				loghdr_meta = get_loghdr_meta();
@@ -1613,7 +1603,6 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 				f_item = (f_replay_t *)container_of(l, f_replay_t, list);
 				lru_key_t k;
 
-               mlfs_info("%s", "FILE\n");
 
 // #ifdef FCONCURRENT
 // 				HASH_ITER(hh, replay_list->f_digest_hash, f_item, t) {
@@ -1668,12 +1657,10 @@ void copy_log_from_replay_list(uint8_t from_dev, struct replay_list *replay_list
 				u_replay_t *u_item;
 				u_item = (u_replay_t *)container_of(l, u_replay_t, list);
 
-                mlfs_info("%s", "UNLINK\n");
 
 				HASH_DEL(replay_list->u_digest_hash, u_item);
 				list_del(l);
 				mlfs_free(u_item);
-				break;
 			}
 			default:
 				panic("unsupported node type!\n");
@@ -1726,9 +1713,7 @@ int coalesce_logs(uint8_t from_dev, int n_hdrs, addr_t *loghdr_to_digest, int *r
 
 		mlfs_free(loghdr_meta);
 	}
-    mlfs_info("%s", "Before copy log from replay list\n");
 	copy_log_from_replay_list(from_dev, &replay_list);
-    mlfs_info("%s", "After Copy Log from replay list\n");
 
 	n_coalesce = i;
 	return n_coalesce;
@@ -1754,9 +1739,7 @@ uint32_t make_digest_request_sync(int percent)
 	log_rotated_during_coalescing = 0;
 	coalesce_count = 0;
 	digest_blkno = g_log_sb->start_digest;
-    mlfs_info("%s", "Before Coalesce Logs\n");
     coalesce_count = coalesce_logs(g_fs_log->dev, g_fs_log->n_digest_req, &digest_blkno, &log_rotated_during_coalescing);
-    mlfs_info("%s", "+++++++++++++++++++++++++++COALESCED!!!!!!!!!!!!!!!!!!!!\n");
     g_fs_log_secure->n_digest_req = atomic_load(&g_log_sb->n_secure_digest);
 #endif
 
@@ -1835,7 +1818,6 @@ void handle_digest_response(char *ack_cmd)
     printf("block number of the super block %lx | size of the overall log %lx\n", disk_sb[g_fs_log->dev].log_start, disk_sb[g_fs_log->dev].nlog);
 
 	//Start cleanup process after digest is done.
-    mlfs_info("%s", "I GOT HERE!!!!!!!!!!!!\n");
 
 	//cleanup_lru_list(lru_updated);
 

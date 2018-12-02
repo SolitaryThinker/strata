@@ -92,7 +92,7 @@ void show_libfs_stats(void)
 	printf("directory search (tsc) : %lu \n", g_perf_stats.dir_search_tsc);
 	printf("temp_debug (tsc)       : %lu \n", g_perf_stats.tmp_tsc);
 	*/
-#if 0
+#if 1
 	printf("wait on digest (nr)   : %lu \n", g_perf_stats.digest_wait_nr);
 	printf("search lsm tree (nr)  : %lu \n", g_perf_stats.tree_search_nr);
 	printf("log writes (nr)       : %lu \n", g_perf_stats.log_write_nr);
@@ -100,6 +100,8 @@ void show_libfs_stats(void)
 	printf("directory search hit  (nr) : %lu \n", g_perf_stats.dir_search_nr_hit);
 	printf("directory search miss (nr) : %lu \n", g_perf_stats.dir_search_nr_miss);
 	printf("directory search notfound (nr) : %lu \n", g_perf_stats.dir_search_nr_notfound);
+    printf("number coalesced (nr) : %lu \n", g_perf_stats.n_coalesced);
+    printf("number coalesced_skipped (nr) %lu \n", g_perf_stats.n_coalesced_skipped);
 #endif
 	printf("--------------------------------------\n");
 }
@@ -121,8 +123,7 @@ void shutdown_fs(void)
 
 	enable_perf_stats = _enable_perf_stats;
 
-	if (enable_perf_stats) 
-		show_libfs_stats();
+	show_libfs_stats();
 
 	/*
 	ret = munmap(mlfs_slab_pool_shared, SHM_SIZE);
@@ -321,12 +322,12 @@ void init_fs(void)
 
 		initialized = 1;
 
-		perf_profile = getenv("MLFS_PROFILE");
+        //perf_profile = getenv("MLFS_PROFILE");
 
-		if (perf_profile) 
-			enable_perf_stats = 1;		
-		else
-			enable_perf_stats = 0;
+        //if (perf_profile) 
+        //enable_perf_stats = 1;		
+        //else
+			enable_perf_stats = 1;
 
 		memset(&g_perf_stats, 0, sizeof(libfs_stat_t));
 
